@@ -32,3 +32,6 @@ data/
 *.egg-info/
 build/
 dist/
+
+# MaxMind databases are licensed, never commit
+*.mmdb

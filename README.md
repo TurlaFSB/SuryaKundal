@@ -19,7 +19,8 @@ A honeypot's native output is a flat stream of events: one JSON line per connect
 | Durable SQLite storage with idempotent, failure-isolated import | Working |
 | Live log following: events are stored within a second of being written, across log rotation | Working |
 | `surya-kundal ingest` / `watch` / `list` command-line tools | Working |
-| Threat-intelligence enrichment of attacker IPs, cached per IP to respect free-tier limits | Planned |
+| Offline IP geolocation and ASN lookup (MaxMind GeoLite2) with a safe, validated database updater: `surya-kundal geoip update` / `geoip lookup` | Working |
+| Threat-intelligence enrichment of attacker IPs (AbuseIPDB, VirusTotal, Tor exit list), cached per IP to respect free-tier limits | In progress |
 | MITRE ATT&CK technique mapping of attacker commands | Planned |
 | Wazuh SIEM rules for high-risk behaviour | Planned |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
@@ -138,6 +139,10 @@ pyproject.toml     Packaging, dependencies, ruff and pytest config
 ```
 
 `docker-compose.yml` is added in Phase 7, once there is a real stack to orchestrate.
+
+## Third-party data
+
+This product includes GeoLite2 data created by MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com). Run `surya-kundal geoip update` with a free MaxMind account (set `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` in `.env`). The databases are git-ignored and must not be redistributed; GeoLite2 city-level locations are approximate.
 
 ## Security notes
 

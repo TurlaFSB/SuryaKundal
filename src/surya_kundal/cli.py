@@ -1,4 +1,4 @@
-"""Command-line entry point: ``surya-kundal ingest | watch | list``."""
+"""Command-line entry point: ``surya-kundal ingest | watch | list | geoip``."""
 
 from __future__ import annotations
 
@@ -10,14 +10,18 @@ import sys
 import threading
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import func, select
 
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
 from surya_kundal.database.models import Command, HoneypotSession, Login
+from surya_kundal.enrichment.geoip import GeoIPLookup
+from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
 from surya_kundal.ingest import ingest_log
 from surya_kundal.watcher import Watcher
 
 DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
+DEFAULT_GEOIP_DIR = "data/geoip"
 
 
 def _add_log_and_db_options(subparser: argparse.ArgumentParser) -> None:
@@ -53,7 +57,54 @@ def _build_parser() -> argparse.ArgumentParser:
     listing = sub.add_parser("list", help="show stored sessions, newest first")
     listing.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
     listing.add_argument("--limit", type=int, default=20, help="maximum rows to show")
+
+    geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
+    geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
+    update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
+    update.add_argument("--dir", type=Path, default=None, help="database directory")
+    update.add_argument("--force", action="store_true", help="download even if recent")
+    lookup = geo_sub.add_parser("lookup", help="look up one IP address")
+    lookup.add_argument("ip")
+    lookup.add_argument("--dir", type=Path, default=None, help="database directory")
     return parser
+
+
+def _geoip_dir(args: argparse.Namespace) -> Path:
+    return (args.dir or Path(os.environ.get("GEOIP_DB_DIR", DEFAULT_GEOIP_DIR))).expanduser()
+
+
+def _run_geoip(args: argparse.Namespace) -> int:
+    if args.geoip_action == "update":
+        try:
+            results = update_all(
+                _geoip_dir(args),
+                os.environ.get("MAXMIND_ACCOUNT_ID", "").strip(),
+                os.environ.get("MAXMIND_LICENSE_KEY", "").strip(),
+                force=args.force,
+            )
+        except GeoIPUpdateError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        for r in results:
+            print(f"{r.edition}: {'updated' if r.updated else 'skipped'} ({r.reason})")
+        return 0
+
+    lookup = GeoIPLookup(_geoip_dir(args))
+    try:
+        if not lookup.available:
+            print(
+                "error: no GeoIP databases found. Run: surya-kundal geoip update", file=sys.stderr
+            )
+            return 1
+        info = lookup.lookup(args.ip)
+    finally:
+        lookup.close()
+    if info is None:
+        print(f"No data for {args.ip} (private, invalid or unknown address).")
+        return 0
+    for name, value in vars(info).items():
+        print(f"{name:<20}{value if value is not None else '-'}")
+    return 0
 
 
 def _run_watch(args: argparse.Namespace) -> int:
@@ -127,12 +178,13 @@ def _run_list(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     logging.basicConfig(
         level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     args = _build_parser().parse_args(argv)
-    handlers = {"ingest": _run_ingest, "watch": _run_watch, "list": _run_list}
+    handlers = {"ingest": _run_ingest, "watch": _run_watch, "list": _run_list, "geoip": _run_geoip}
     return handlers[args.action](args)
 
 
