@@ -17,7 +17,7 @@
     <image href="{{ url_for('static', filename='world.svg') }}" width="960" height="480"/>
     {% for pt in points %}
     {% set xy = project(pt.longitude, pt.latitude) %}
-    <circle class="dot" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ [3 + pt.sessions ** 0.5, 12] | min | round(1) }}"><title>{{ pt.ip | p }}{% if pt.city %}, {{ pt.city | p }}{% endif %}{% if pt.country %} ({{ pt.country | p }}){% endif %}: {{ pt.sessions }} sessions</title></circle>
+    <circle class="dot" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ [4 + pt.sessions ** 0.5, 12] | min | round(1) }}"><title>{{ pt.ip | p }}{% if pt.city %}, {{ pt.city | p }}{% endif %}{% if pt.country %} ({{ pt.country | p }}){% endif %}: {{ pt.sessions }} sessions</title></circle>
     {% endfor %}
   </svg>
   {% if not points %}<p class="muted">No located visitors yet. Run <code>surya-kundal enrich</code>; private and local addresses have no location.</p>{% endif %}
@@ -26,13 +26,15 @@
 <section class="panel">
   <h2>How far they got</h2>
   {% set top = [depth.contact, 1] | max %}
-  <svg class="steps" viewBox="0 0 300 168" role="img" aria-label="Funnel of sessions by depth">
+  <svg class="steps" viewBox="0 0 300 176" role="img" aria-label="Funnel of sessions by depth">
     {% for label, value in [('Connected', depth.contact), ('Logged in', depth.access), ('Ran commands', depth.hands_on), ('Took action', depth.action)] %}
-    <rect class="step s{{ loop.index }}" x="0" y="{{ (loop.index0 * 42) }}" width="{{ (value / top * 300) | round(1) }}" height="36" rx="3"/>
-    <text x="8" y="{{ loop.index0 * 42 + 23 }}">{{ label }}: {{ value }}</text>
+    <text class="lab" x="0" y="{{ loop.index0 * 44 + 14 }}">{{ label }}</text>
+    <text class="val" x="300" y="{{ loop.index0 * 44 + 14 }}" text-anchor="end">{{ value }}</text>
+    <rect class="track" x="0" y="{{ loop.index0 * 44 + 22 }}" width="300" height="10" rx="5"/>
+    <rect class="step s{{ loop.index }}" x="0" y="{{ loop.index0 * 44 + 22 }}" width="{{ [(value / top * 300) | round(1), 10] | max if value else 0 }}" height="10" rx="5"/>
     {% endfor %}
   </svg>
-  <p class="muted">Each step is a smaller pool: most visitors never get past the first.</p>
+  <p class="muted">Most visitors never get past the first step.</p>
 </section>
 
 <section class="panel">
@@ -40,7 +42,7 @@
   {% set peak = [hourly | max, 1] | max %}
   <svg class="bars" viewBox="0 0 240 80" role="img" aria-label="Sessions per hour">
     {% for n in hourly %}
-    <rect class="bar" x="{{ loop.index0 * 10 }}" y="{{ 80 - (n / peak * 78) | round(1) }}" width="8" height="{{ (n / peak * 78) | round(1) }}"><title>{{ n }} sessions</title></rect>
+    <rect class="bar" rx="2" x="{{ loop.index0 * 10 }}" y="{{ 80 - (n / peak * 78) | round(1) }}" width="8" height="{{ (n / peak * 78) | round(1) }}"><title>{{ n }} sessions</title></rect>
     {% endfor %}
   </svg>
   <p class="muted">Peak: {{ peak if hourly | max else 0 }} per hour.</p>
@@ -59,7 +61,7 @@
   <ul class="plain">
     {% for t in techniques %}
     <li><a href="{{ url_for('sessions', technique=t.technique_id) }}">{{ t.technique_id | p }}</a> {{ t.name | p }} <span class="num">{{ t.sessions }}</span>
-      <svg class="meter" viewBox="0 0 100 4" aria-hidden="true"><rect width="{{ (t.sessions / tmax * 100) | round(1) }}" height="4"/></svg></li>
+      <svg class="meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="{{ (t.sessions / tmax * 100) | round(1) }}" height="4"/></svg></li>
     {% else %}<li class="muted">None yet. Run <code>surya-kundal map</code>.</li>{% endfor %}
   </ul>
 </section>
