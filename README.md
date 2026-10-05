@@ -185,3 +185,7 @@ MITRE ATT&CK(R) is a registered trademark of The MITRE Corporation. Technique da
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) for how to report a vulnerability and the design choices that matter. In short: honeypot logs, captured malware, databases and `.env` files are git-ignored; when deployed on the public internet, outbound traffic from the honeypot host must be restricted (Cowrie performs real downloads when an attacker runs `wget`); and the honeypot belongs on an isolated host, never alongside real services.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Third-party data (MaxMind GeoLite2, MITRE ATT&CK) keeps its own terms, noted above.
