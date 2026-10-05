@@ -4,7 +4,7 @@
 
 Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, enriches each source IP and captured file with threat intelligence, maps what the attacker did to MITRE ATT&CK techniques, and stores it all in a queryable database. Wazuh alert rules are included; a live dashboard is the next phase.
 
-> **Status:** active development. Capture, storage, enrichment, ATT&CK mapping, and the command-line tools work today and are covered by an automated test suite. The Wazuh rules are written and unit-tested but still need a live check against a real manager; the dashboard, containerised deployment, and public deployment are not built yet; the table below is explicit about which is which.
+> **Status:** active development. Capture, storage, enrichment, ATT&CK mapping, and the command-line tools work today and are covered by an automated test suite. The Wazuh rules are unit-tested and verified against a real Wazuh 4.14.7 manager; the dashboard, containerised deployment, and public deployment are not built yet; the table below is explicit about which is which.
 
 ## Why this exists
 
@@ -36,7 +36,7 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 | Threat-intel enrichment: AbuseIPDB score and Tor exit-node check per IP, VirusTotal verdict per captured file. Each IP and hash is looked up once; daily budgets stay under free-tier limits and survive restarts | Working |
 | MITRE ATT&CK mapping of commands, logins, transfers and tunnelling: 70+ reviewable rules, each with its own pass/fail examples, validated against the official ATT&CK catalog | Working |
 | One-process service (`surya-kundal run`): capture, ATT&CK mapping, background enrichment | Working |
-| Wazuh rules for Cowrie events, generated from the ATT&CK rules (see `wazuh/`) | Written and tested; live check pending |
+| Wazuh rules for Cowrie events, generated from the ATT&CK rules (see `wazuh/`) | Done, verified on Wazuh 4.14.7 |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
 | One-command deployment with Docker Compose | Planned |
 | Public deployment and real-world data collection | Planned |
@@ -147,7 +147,7 @@ surya-kundal show <session-id>     # one session: commands with their techniques
 | 2 | Database layer and live log watcher | Done |
 | 3 | Threat-intel enrichment with caching and rate limits | Done |
 | 4 | MITRE ATT&CK mapping engine | Done |
-| 5 | Wazuh custom rules | Written; live check pending |
+| 5 | Wazuh custom rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Flask dashboard | Planned |
 | 7 | Docker Compose for the whole stack | Planned |
 | 8 | Deploy to a cloud VM and collect real attacker data | Planned |

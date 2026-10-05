@@ -28,7 +28,7 @@ Differences from the Python mapping, stated plainly: Wazuh cannot split a comman
 
 ## Setting it up
 
-The unit tests check the rules offline. `logtest.sh` is the real check; it has not been run against a live manager yet.
+The unit tests check the rules offline. `logtest.sh` is the real check; it was verified against Wazuh 4.14.7.
 
 1. Start the manager: `cd wazuh && docker compose up -d`
 2. Check the rules load: `docker logs surya-wazuh-manager 2>&1 | grep -i -E "error|critical" | head`
