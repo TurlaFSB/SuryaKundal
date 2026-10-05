@@ -46,9 +46,26 @@ All enrichment sources use free tiers. No paid services are required.
 ## Built so far
 
 - Cowrie 3.x running locally in a Kali VM, logging JSON events
-- Log parser skeleton in `parser/log_parser.py`
+- Log parser in `parser/log_parser.py`
 - Test suite for the parser in `tests/`, with sample events taken from a real captured session
 - CI running `pytest` on every push
+- Project skeleton for the later phases (empty packages, config template)
+
+## Project layout
+
+```
+parser/        Cowrie log parsing (Phase 1)
+database/      SQLAlchemy models and storage (Phase 2)
+enrichment/    Threat-intel API clients (Phase 3)
+mapping/       ATT&CK mapping engine (Phase 4)
+wazuh/         Custom Wazuh rules (Phase 5)
+dashboard/     Flask web UI (Phase 6)
+cowrie/        Notes on our Cowrie configuration
+tests/         pytest suite
+.env.example   Required environment variables
+```
+
+`docker-compose.yml` is added in Phase 7, once there is a real stack to orchestrate.
 
 ## Development
 
