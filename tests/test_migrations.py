@@ -108,3 +108,27 @@ def test_init_db_uses_migrations_and_works_in_memory():
     with make_session_factory(memory)() as db:
         assert db.scalars(select(HoneypotSession)).all() == []
     assert _version(memory) == _head()
+
+
+def test_a_database_from_an_older_version_is_refused_with_a_clear_message(tmp_path, capsys):
+    from sqlalchemy import text
+
+    from surya_kundal.cli import main
+    from surya_kundal.database.migrate import SchemaError
+
+    path = tmp_path / "old.db"
+    engine = create_db_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE sessions (id VARCHAR(64) PRIMARY KEY)"))
+        connection.execute(
+            text(
+                "CREATE TABLE commands (id INTEGER PRIMARY KEY, session_id VARCHAR(64) NOT NULL,"
+                " seq INTEGER NOT NULL, command TEXT NOT NULL, timestamp DATETIME)"
+            )
+        )
+    with pytest.raises(SchemaError, match=r"older version.*seq"):
+        init_db(engine)
+    engine.dispose()
+
+    assert main(["list", "--db", f"sqlite:///{path}"]) == 2
+    assert "older version" in capsys.readouterr().err

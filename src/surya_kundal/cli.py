@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from surya_kundal import __version__
 from surya_kundal.config import Settings, load_env_file
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
+from surya_kundal.database.migrate import SchemaError
 from surya_kundal.database.models import (
     Command,
     HoneypotSession,
@@ -422,7 +423,11 @@ def main(argv: list[str] | None = None) -> int:
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
     }
-    return handlers[args.action](args, settings)
+    try:
+        return handlers[args.action](args, settings)
+    except SchemaError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
