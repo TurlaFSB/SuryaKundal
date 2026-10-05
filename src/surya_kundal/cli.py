@@ -386,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     # httpx logs full request URLs at INFO, including signed download links.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("alembic").setLevel(logging.WARNING)
     args = _build_parser().parse_args(argv)
     handlers = {
         "run": _run_service,

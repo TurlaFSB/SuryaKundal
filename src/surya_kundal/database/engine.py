@@ -9,7 +9,7 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from surya_kundal.database.models import Base
+from surya_kundal.database.migrate import upgrade_database
 
 DEFAULT_DATABASE_URL = "sqlite:///data/surya_kundal.db"
 
@@ -49,8 +49,8 @@ def _configure_sqlite(dbapi_connection, _connection_record) -> None:
 
 
 def init_db(engine: Engine) -> None:
-    """Create any missing tables. Existing tables are left untouched."""
-    Base.metadata.create_all(engine)
+    """Bring the database to the current schema (creating or migrating as needed)."""
+    upgrade_database(engine)
 
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:
