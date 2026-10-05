@@ -1,11 +1,13 @@
-"""Command-line entry point: ``surya-kundal ingest`` and ``surya-kundal list``."""
+"""Command-line entry point: ``surya-kundal ingest | watch | list``."""
 
 from __future__ import annotations
 
 import argparse
 import logging
 import os
+import signal
 import sys
+import threading
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -13,8 +15,23 @@ from sqlalchemy import func, select
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
 from surya_kundal.database.models import Command, HoneypotSession, Login
 from surya_kundal.ingest import ingest_log
+from surya_kundal.watcher import Watcher
 
 DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
+
+
+def _add_log_and_db_options(subparser: argparse.ArgumentParser) -> None:
+    subparser.add_argument(
+        "--log",
+        type=Path,
+        default=None,
+        help=f"Cowrie JSON log (default: $COWRIE_LOG_PATH or {DEFAULT_LOG_PATH})",
+    )
+    subparser.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
+
+
+def _resolve_log_path(args: argparse.Namespace) -> Path:
+    return (args.log or Path(os.environ.get("COWRIE_LOG_PATH", DEFAULT_LOG_PATH))).expanduser()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -22,13 +39,16 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", required=True)
 
     ingest = sub.add_parser("ingest", help="import a Cowrie JSON log into the database")
-    ingest.add_argument(
-        "--log",
-        type=Path,
-        default=None,
-        help=f"Cowrie JSON log (default: $COWRIE_LOG_PATH or {DEFAULT_LOG_PATH})",
+    _add_log_and_db_options(ingest)
+
+    watch = sub.add_parser("watch", help="follow a Cowrie JSON log and store events live")
+    _add_log_and_db_options(watch)
+    watch.add_argument("--interval", type=float, default=1.0, help="seconds between polls")
+    watch.add_argument(
+        "--from-end",
+        action="store_true",
+        help="ignore what is already in the log and store only new events",
     )
-    ingest.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
 
     listing = sub.add_parser("list", help="show stored sessions, newest first")
     listing.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
@@ -36,8 +56,31 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_watch(args: argparse.Namespace) -> int:
+    log_path = _resolve_log_path(args)
+    if args.interval <= 0:
+        print("error: --interval must be greater than 0", file=sys.stderr)
+        return 2
+
+    engine = create_db_engine(args.db)
+    init_db(engine)
+    watcher = Watcher(
+        log_path,
+        make_session_factory(engine),
+        interval=args.interval,
+        from_end=args.from_end,
+    )
+
+    stop = threading.Event()
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signum, lambda *_: stop.set())
+
+    watcher.run(stop)
+    return 0
+
+
 def _run_ingest(args: argparse.Namespace) -> int:
-    log_path = (args.log or Path(os.environ.get("COWRIE_LOG_PATH", DEFAULT_LOG_PATH))).expanduser()
+    log_path = _resolve_log_path(args)
     if not log_path.is_file():
         print(f"error: log file not found: {log_path}", file=sys.stderr)
         return 2
@@ -89,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     args = _build_parser().parse_args(argv)
-    handlers = {"ingest": _run_ingest, "list": _run_list}
+    handlers = {"ingest": _run_ingest, "watch": _run_watch, "list": _run_list}
     return handlers[args.action](args)
 
 

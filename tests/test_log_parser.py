@@ -19,6 +19,8 @@ Contract that summarize() must satisfy:
 
 import json
 
+import pytest
+
 from sample_events import (
     CLIENT_VERSION,
     HASSH,
@@ -35,7 +37,12 @@ from sample_events import (
     T_OK,
     make_event,
 )
-from surya_kundal.parser.log_parser import group_by_session, read_events, summarize
+from surya_kundal.parser.log_parser import (
+    group_by_session,
+    parse_event_line,
+    read_events,
+    summarize,
+)
 
 # --- read_events -----------------------------------------------------------
 
@@ -158,3 +165,17 @@ def test_summarize_empty_session_returns_empty_collections():
         "commands": [],
         "downloads": [],
     }
+
+
+# --- parse_event_line ------------------------------------------------------
+
+
+def test_parse_event_line_returns_the_event_dict():
+    event = parse_event_line(json.dumps(SESSION_A_EVENTS[0]) + "\n")
+
+    assert event["session"] == SESSION_A
+
+
+@pytest.mark.parametrize("line", ["", "   \n", "{broken", "[1, 2, 3]", '"just a string"', "42"])
+def test_parse_event_line_returns_none_for_unusable_lines(line):
+    assert parse_event_line(line) is None

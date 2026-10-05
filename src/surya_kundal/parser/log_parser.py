@@ -6,14 +6,34 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def parse_event_line(line: str, line_number: int | None = None) -> dict | None:
+    """Parse one line of the Cowrie JSON log into an event dict.
+
+    Returns None for blank lines, malformed JSON, and JSON that is not an object,
+    so a single bad line can never stop processing.
+    """
+    line = line.strip()
+    if not line:
+        return None
+    where = f" {line_number}" if line_number is not None else ""
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        logger.warning("Skipping malformed line%s", where)
+        return None
+    if not isinstance(event, dict):
+        logger.warning("Skipping non-object JSON on line%s", where)
+        return None
+    return event
+
+
 def read_events(log_path: Path):
     """Yield one parsed event (dict) per line of the Cowrie JSON log."""
-    with log_path.open() as f:
+    with log_path.open(encoding="utf-8", errors="replace") as f:
         for line_number, line in enumerate(f, start=1):
-            try:
-                yield json.loads(line)
-            except json.JSONDecodeError:
-                logger.warning("Skipping malformed line %d", line_number)
+            event = parse_event_line(line, line_number)
+            if event is not None:
+                yield event
 
 
 def group_by_session(events):

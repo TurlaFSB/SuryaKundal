@@ -4,7 +4,7 @@
 
 Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, and stores it in a queryable database. The planned phases add per-IP threat-intelligence enrichment, mapping of attacker commands to MITRE ATT&CK techniques, Wazuh SIEM alerting, and a live dashboard.
 
-> **Status:** early development. Capture, session reconstruction, storage, and the command-line tools work today. Enrichment, ATT&CK mapping, Wazuh integration, and the dashboard are not built yet. The table below is explicit about which is which.
+> **Status:** early development. Capture, session reconstruction, live storage, and the command-line tools work today. Enrichment, ATT&CK mapping, Wazuh integration, and the dashboard are not built yet. The table below is explicit about which is which.
 
 ## Why this exists
 
@@ -17,8 +17,8 @@ A honeypot's native output is a flat stream of events: one JSON line per connect
 | SSH honeypot capture (Cowrie) | Working |
 | Session reconstruction from the event stream: credentials tried, commands typed, files downloaded (with SHA-256), timing, client version, HASSH fingerprint | Working |
 | Durable SQLite storage with idempotent, failure-isolated import | Working |
-| `surya-kundal ingest` / `list` command-line tools | Working |
-| Live log following (store events as they arrive) | In progress |
+| Live log following: events are stored within a second of being written, across log rotation | Working |
+| `surya-kundal ingest` / `watch` / `list` command-line tools | Working |
 | Threat-intelligence enrichment of attacker IPs, cached per IP to respect free-tier limits | Planned |
 | MITRE ATT&CK technique mapping of attacker commands | Planned |
 | Wazuh SIEM rules for high-risk behaviour | Planned |
@@ -54,15 +54,16 @@ Everything from the log parser onward is code in this repository. Cowrie itself 
 |---|---|---|
 | `sessions` | attacker visit | Cowrie session ID, source IP, start/end time, duration, SSH client version, HASSH |
 | `logins` | credential attempt | username, password, success flag, timestamp |
-| `commands` | command typed | order within the session, command text, timestamp |
+| `commands` | command typed | command text, timestamp (read back in chronological order) |
 | `downloads` | file fetched by the attacker | URL, SHA-256, timestamp |
 
 ## Engineering approach
 
 What is in place today:
 
-- **Idempotent import.** Importing the same log twice never creates duplicates, and a session stored while still in progress is completed when its closing events arrive.
-- **Failure isolation.** A malformed log line is skipped, and a session that fails to save is logged without aborting the rest of the import.
+- **Additive, idempotent storage.** Sessions are merged into the database, never rewritten. Importing the same log twice creates no duplicates, a session saved mid-attack is completed when its closing events arrive, a partial view can never destroy data already stored, and row IDs stay stable so later tables can reference them. Event identity is enforced with unique constraints in the database itself.
+- **A watcher built for real log files.** It copes with log rotation (including a session split across two files), truncation, a half-written last line, and a log that does not exist yet. It shuts down cleanly on `SIGINT`/`SIGTERM`, and a restart safely replays the log.
+- **Failure isolation.** A malformed log line is skipped, a session that fails to save is logged without aborting the rest, and an unexpected error in one watch cycle does not stop the service.
 - **Correct time handling.** Timestamps are stored and returned as timezone-aware UTC. SQLite returns naive datetimes by default, so a custom column type enforces this.
 - **Database integrity.** Foreign keys are enforced (SQLite ignores them unless enabled) and WAL mode lets a reader, such as the dashboard, work while the importer writes.
 - **Typed SQLAlchemy 2.0 models** and a clean `src/` package layout, installable with `pip`.
@@ -84,12 +85,20 @@ pip install -e ".[dev]"
 pytest -v
 ```
 
-Import a Cowrie log and look at what was captured:
+Import an existing Cowrie log, then look at what was captured:
 
 ```bash
 surya-kundal ingest --log ~/cowrie/var/log/cowrie/cowrie.json
 surya-kundal list
 ```
+
+Or follow the log live and store events as Cowrie writes them (stop with Ctrl+C):
+
+```bash
+surya-kundal watch --log ~/cowrie/var/log/cowrie/cowrie.json
+```
+
+`watch` starts from the top of the log by default, which is safe because storage is idempotent. Add `--from-end` to store only new events.
 
 The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_kundal.db`). See `.env.example` for all settings.
 
@@ -99,7 +108,7 @@ The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_k
 |---|---|---|
 | 0 | Repo skeleton, tests, CI | Done |
 | 1 | Cowrie running, log parser | Done |
-| 2 | Database layer and live log watcher | Database and batch import done; live watcher next |
+| 2 | Database layer and live log watcher | Done |
 | 3 | Threat-intel enrichment with caching and rate limits | Planned |
 | 4 | MITRE ATT&CK mapping engine | Planned |
 | 5 | Wazuh custom rules | Planned |

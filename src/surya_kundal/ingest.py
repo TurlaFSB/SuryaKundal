@@ -1,8 +1,9 @@
-"""Import a Cowrie JSON log into the database."""
+"""Turn Cowrie events into stored sessions."""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,23 +22,28 @@ class IngestResult:
     failed: int
 
 
-def ingest_log(db: Session, log_path: Path) -> IngestResult:
-    """Parse ``log_path`` and store every session in it.
+def store_events(db: Session, events: Iterable[dict]) -> IngestResult:
+    """Group events by session and merge each session into the database.
 
-    Each session is stored inside its own savepoint, so one session that fails
-    to save is logged and skipped instead of aborting the whole import. The
-    caller commits the transaction.
+    Each session is stored inside its own savepoint, so one session that fails to
+    save is logged and skipped instead of aborting the rest. The caller commits.
     """
     saved = 0
     failed = 0
-    for session_id, events in group_by_session(read_events(log_path)).items():
+    for session_id, session_events in group_by_session(events).items():
         try:
             with db.begin_nested():
-                save_session(db, session_id, summarize(events))
+                save_session(db, session_id, summarize(session_events))
         except (SQLAlchemyError, ValueError):
             logger.exception("Could not store session %s", session_id)
             failed += 1
         else:
             saved += 1
-    logger.info("Ingest finished: %d saved, %d failed", saved, failed)
     return IngestResult(saved=saved, failed=failed)
+
+
+def ingest_log(db: Session, log_path: Path) -> IngestResult:
+    """Parse the whole of ``log_path`` and store every session in it."""
+    result = store_events(db, read_events(log_path))
+    logger.info("Ingest finished: %d saved, %d failed", result.saved, result.failed)
+    return result
