@@ -31,56 +31,76 @@ def parse_timestamp(value: str | None) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def _earliest(a: datetime | None, b: datetime | None) -> datetime | None:
+    present = [t for t in (a, b) if t is not None]
+    return min(present) if present else None
+
+
+def _latest(a: datetime | None, b: datetime | None) -> datetime | None:
+    present = [t for t in (a, b) if t is not None]
+    return max(present) if present else None
+
+
 def save_session(db: Session, session_id: str, summary: dict[str, Any]) -> HoneypotSession:
-    """Store one session summary (the output of ``parser.log_parser.summarize``).
+    """Merge one session summary (from ``parser.log_parser.summarize``) into the database.
 
-    Idempotent: saving the same session ID again replaces the earlier copy, so
-    re-running an import never creates duplicates, and a session that was stored
-    while still in progress is completed when its closing events arrive.
+    The merge is additive and idempotent:
+
+    - A session seen for the first time is created.
+    - A session already stored is extended: events we have not seen are added,
+      events we already have are ignored, and nothing is ever deleted or rewritten.
+
+    That makes it safe to feed the same events twice, to feed a session in several
+    pieces (a live tail, or a session split across a log rotation), or to feed only
+    a partial view. Row IDs stay stable, so later tables can reference them.
+
+    Events are identified by their natural key (timestamp plus content). Two
+    identical events with the same timestamp collapse into one.
     """
-    existing = db.get(HoneypotSession, session_id)
-    if existing is not None:
-        db.delete(existing)
-        db.flush()
+    record = db.get(HoneypotSession, session_id)
+    if record is None:
+        record = HoneypotSession(id=session_id)
+        db.add(record)
 
-    record = HoneypotSession(
-        id=session_id,
-        src_ip=summary.get("src_ip"),
-        start_time=parse_timestamp(summary.get("start_time")),
-        end_time=parse_timestamp(summary.get("end_time")),
-        duration_ms=summary.get("duration_ms"),
-        client_version=summary.get("client_version"),
-        hassh=summary.get("hassh"),
-    )
+    if summary.get("src_ip") is not None:
+        record.src_ip = summary["src_ip"]
+    if summary.get("client_version") is not None:
+        record.client_version = summary["client_version"]
+    if summary.get("hassh") is not None:
+        record.hassh = summary["hassh"]
+    if summary.get("duration_ms") is not None:
+        record.duration_ms = summary["duration_ms"]
+    record.start_time = _earliest(record.start_time, parse_timestamp(summary.get("start_time")))
+    record.end_time = _latest(record.end_time, parse_timestamp(summary.get("end_time")))
 
+    seen_logins = {(x.timestamp, x.username, x.password, x.success) for x in record.logins}
     for login in summary.get("logins", []):
-        record.logins.append(
-            Login(
-                username=login.get("username"),
-                password=login.get("password"),
-                success=bool(login.get("success")),
-                timestamp=parse_timestamp(login.get("timestamp")),
+        timestamp = parse_timestamp(login.get("timestamp"))
+        username, password = login.get("username"), login.get("password")
+        success = bool(login.get("success"))
+        key = (timestamp, username, password, success)
+        if key not in seen_logins:
+            seen_logins.add(key)
+            record.logins.append(
+                Login(username=username, password=password, success=success, timestamp=timestamp)
             )
-        )
 
-    commands = [c for c in summary.get("commands", []) if c.get("command") is not None]
-    for seq, command in enumerate(commands):
-        record.commands.append(
-            Command(
-                seq=seq,
-                command=command["command"],
-                timestamp=parse_timestamp(command.get("timestamp")),
-            )
-        )
+    seen_commands = {(x.timestamp, x.command) for x in record.commands}
+    for command in summary.get("commands", []):
+        text = command.get("command")
+        if text is None:
+            continue
+        timestamp = parse_timestamp(command.get("timestamp"))
+        if (timestamp, text) not in seen_commands:
+            seen_commands.add((timestamp, text))
+            record.commands.append(Command(command=text, timestamp=timestamp))
 
+    seen_downloads = {(x.timestamp, x.url, x.sha256) for x in record.downloads}
     for download in summary.get("downloads", []):
-        record.downloads.append(
-            Download(
-                url=download.get("url"),
-                sha256=download.get("sha256"),
-                timestamp=parse_timestamp(download.get("timestamp")),
-            )
-        )
+        timestamp = parse_timestamp(download.get("timestamp"))
+        url, sha256 = download.get("url"), download.get("sha256")
+        if (timestamp, url, sha256) not in seen_downloads:
+            seen_downloads.add((timestamp, url, sha256))
+            record.downloads.append(Download(url=url, sha256=sha256, timestamp=timestamp))
 
-    db.add(record)
     return record

@@ -3,6 +3,9 @@
 One row per attacker visit in ``sessions``; the things that happened during the
 visit hang off it in ``logins``, ``commands`` and ``downloads``. Threat-intel and
 ATT&CK tables are added in their own phases.
+
+Rows are only ever added, never rewritten, so other tables can safely point at a
+command or download by ID.
 """
 
 from __future__ import annotations
@@ -66,20 +69,21 @@ class HoneypotSession(Base):
     client_version: Mapped[str | None] = mapped_column(String(255))
     hassh: Mapped[str | None] = mapped_column(String(32), index=True)
 
+    # Children are listed in the order they happened (timestamp, then insertion order).
     logins: Mapped[list[Login]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
-        order_by="Login.id",
+        order_by=lambda: (Login.timestamp, Login.id),
     )
     commands: Mapped[list[Command]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
-        order_by="Command.seq",
+        order_by=lambda: (Command.timestamp, Command.id),
     )
     downloads: Mapped[list[Download]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
-        order_by="Download.id",
+        order_by=lambda: (Download.timestamp, Download.id),
     )
 
     def __repr__(self) -> str:
@@ -87,9 +91,18 @@ class HoneypotSession(Base):
 
 
 class Login(Base):
-    """One credential attempt (failed or successful)."""
+    """One credential attempt (failed or successful).
+
+    The unique constraint is the event's natural identity, so seeing the same
+    log line twice can never create a second row.
+    """
 
     __tablename__ = "logins"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "timestamp", "username", "password", "success", name="uq_login_event"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(
@@ -104,16 +117,17 @@ class Login(Base):
 
 
 class Command(Base):
-    """One command typed by the attacker. ``seq`` preserves typing order."""
+    """One command typed by the attacker. Ordered by timestamp, then insertion order."""
 
     __tablename__ = "commands"
-    __table_args__ = (UniqueConstraint("session_id", "seq", name="uq_command_session_seq"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "timestamp", "command", name="uq_command_event"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
-    seq: Mapped[int] = mapped_column(Integer)
     command: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
@@ -124,7 +138,10 @@ class Download(Base):
     """A file the attacker pulled onto the honeypot (wget/curl)."""
 
     __tablename__ = "downloads"
-    __table_args__ = (Index("ix_downloads_sha256", "sha256"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "timestamp", "url", "sha256", name="uq_download_event"),
+        Index("ix_downloads_sha256", "sha256"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(

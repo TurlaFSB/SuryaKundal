@@ -20,7 +20,7 @@ from surya_kundal.database.engine import (
     init_db,
     make_session_factory,
 )
-from surya_kundal.database.models import Command, HoneypotSession, Login, UTCDateTime
+from surya_kundal.database.models import Command, Download, HoneypotSession, Login, UTCDateTime
 from surya_kundal.database.repository import parse_timestamp, save_session
 from surya_kundal.parser.log_parser import summarize
 
@@ -86,10 +86,33 @@ def test_foreign_keys_are_enforced(db):
         db.flush()
 
 
-def test_command_sequence_is_unique_per_session(db):
+def test_database_refuses_a_duplicate_command_event(db):
+    ts = datetime(2026, 10, 5, 7, 12, 2, tzinfo=UTC)
     db.add(HoneypotSession(id=SESSION_A))
-    db.add(Command(session_id=SESSION_A, seq=0, command="whoami"))
-    db.add(Command(session_id=SESSION_A, seq=0, command="id"))
+    db.add(Command(session_id=SESSION_A, timestamp=ts, command="whoami"))
+    db.add(Command(session_id=SESSION_A, timestamp=ts, command="whoami"))
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+
+def test_database_refuses_a_duplicate_login_event(db):
+    ts = datetime(2026, 10, 5, 7, 12, 2, tzinfo=UTC)
+    db.add(HoneypotSession(id=SESSION_A))
+    for _ in range(2):
+        db.add(
+            Login(session_id=SESSION_A, timestamp=ts, username="root", password="x", success=False)
+        )
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+
+def test_database_refuses_a_duplicate_download_event(db):
+    ts = datetime(2026, 10, 5, 7, 12, 2, tzinfo=UTC)
+    db.add(HoneypotSession(id=SESSION_A))
+    for _ in range(2):
+        db.add(Download(session_id=SESSION_A, timestamp=ts, url="http://x/y", sha256=SHA))
 
     with pytest.raises(IntegrityError):
         db.flush()
@@ -134,10 +157,7 @@ def test_save_session_persists_all_fields(db):
         ("root", "123456", False),
         ("root", "apple", True),
     ]
-    assert [(c.seq, c.command) for c in stored.commands] == [
-        (0, "whoami"),
-        (1, "cat /etc/passwd"),
-    ]
+    assert [c.command for c in stored.commands] == ["whoami", "cat /etc/passwd"]
     assert [(d.url, d.sha256) for d in stored.downloads] == [("http://example.com/test/sh", SHA)]
 
 
@@ -196,7 +216,78 @@ def test_save_session_tolerates_malformed_timestamp_and_missing_command(db):
     stored = db.get(HoneypotSession, SESSION_A)
     assert stored.start_time is None
     assert [c.command for c in stored.commands] == ["ls"]
-    assert stored.commands[0].seq == 0
+
+
+# --- merge behaviour -------------------------------------------------------
+
+
+def _ids(db):
+    return {
+        "commands": sorted(db.scalars(select(Command.id)).all()),
+        "logins": sorted(db.scalars(select(Login.id)).all()),
+        "downloads": sorted(db.scalars(select(Download.id)).all()),
+    }
+
+
+def test_resaving_leaves_existing_row_ids_untouched(db):
+    summary = summarize(SESSION_A_EVENTS)
+    save_session(db, SESSION_A, summary)
+    db.commit()
+    before = _ids(db)
+
+    save_session(db, SESSION_A, summary)
+    db.commit()
+
+    assert _ids(db) == before
+
+
+def test_pieces_of_one_session_are_merged_not_overwritten(db):
+    first_half = SESSION_A_EVENTS[:6]  # up to and including the first command
+    second_half = SESSION_A_EVENTS[6:]  # second command, download, close
+
+    save_session(db, SESSION_A, summarize(first_half))
+    db.commit()
+    save_session(db, SESSION_A, summarize(second_half))
+    db.commit()
+    db.expire_all()
+
+    stored = db.get(HoneypotSession, SESSION_A)
+    assert [c.command for c in stored.commands] == ["whoami", "cat /etc/passwd"]
+    assert len(stored.logins) == 2
+    assert len(stored.downloads) == 1
+    assert stored.end_time is not None
+    assert stored.hassh == HASSH
+
+
+def test_a_partial_view_never_destroys_what_is_already_stored(db):
+    save_session(db, SESSION_A, summarize(SESSION_A_EVENTS))
+    db.commit()
+    before = _ids(db)
+
+    only_the_close_event = [SESSION_A_EVENTS[-1]]
+    save_session(db, SESSION_A, summarize(only_the_close_event))
+    db.commit()
+    db.expire_all()
+
+    stored = db.get(HoneypotSession, SESSION_A)
+    assert _ids(db) == before
+    assert stored.hassh == HASSH
+    assert stored.start_time == datetime(2026, 10, 5, 7, 11, 23, 959011, tzinfo=UTC)
+
+
+def test_pieces_arriving_out_of_order_still_read_chronologically(db):
+    later = [SESSION_A_EVENTS[6]]  # "cat /etc/passwd"
+    earlier = [SESSION_A_EVENTS[5]]  # "whoami"
+
+    save_session(db, SESSION_A, summarize(later))
+    db.commit()
+    save_session(db, SESSION_A, summarize(earlier))
+    db.commit()
+    db.expire_all()
+
+    stored = db.get(HoneypotSession, SESSION_A)
+    assert [c.command for c in stored.commands] == ["whoami", "cat /etc/passwd"]
+    assert stored.start_time == datetime(2026, 10, 5, 7, 12, 2, 484294, tzinfo=UTC)
 
 
 def test_deleting_a_session_removes_its_children(db):
