@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -316,3 +317,17 @@ class TechniqueMatch(Base):
     rule_id: Mapped[str] = mapped_column(String(64))
     confidence: Mapped[str] = mapped_column(String(8))
     evidence: Mapped[str] = mapped_column(String(300))
+
+
+class IngestOffset(Base):
+    """Where the live watcher stopped reading a log, so a restart resumes there.
+
+    ``inode`` identifies the file, so a rotated log is not mistaken for the old one.
+    """
+
+    __tablename__ = "ingest_offsets"
+
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    inode: Mapped[int] = mapped_column(BigInteger)
+    offset: Mapped[int] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)

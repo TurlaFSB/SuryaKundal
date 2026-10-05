@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 class IngestResult:
     saved: int
     failed: int
+    failed_ids: tuple[str, ...] = ()
 
 
 def store_events(db: Session, events: Iterable[dict]) -> IngestResult:
@@ -29,17 +30,17 @@ def store_events(db: Session, events: Iterable[dict]) -> IngestResult:
     save is logged and skipped instead of aborting the rest. The caller commits.
     """
     saved = 0
-    failed = 0
+    failed_ids: list[str] = []
     for session_id, session_events in group_by_session(events).items():
         try:
             with db.begin_nested():
                 save_session(db, session_id, summarize(session_events))
         except (SQLAlchemyError, ValueError):
             logger.exception("Could not store session %s", session_id)
-            failed += 1
+            failed_ids.append(session_id)
         else:
             saved += 1
-    return IngestResult(saved=saved, failed=failed)
+    return IngestResult(saved=saved, failed=len(failed_ids), failed_ids=tuple(failed_ids))
 
 
 def ingest_log(db: Session, log_path: Path) -> IngestResult:

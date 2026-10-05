@@ -12,6 +12,7 @@ from surya_kundal.database.models import (
     Command,
     Download,
     HoneypotSession,
+    IngestOffset,
     Login,
     TunnelRequest,
     Upload,
@@ -159,3 +160,18 @@ def save_session(db: Session, session_id: str, summary: dict[str, Any]) -> Honey
             )
 
     return record
+
+
+def load_offset(db: Session, path: str) -> tuple[int, int] | None:
+    """Return ``(inode, offset)`` saved for ``path``, if any."""
+    row = db.get(IngestOffset, path)
+    return (row.inode, row.offset) if row else None
+
+
+def save_offset(db: Session, path: str, inode: int, offset: int) -> None:
+    now = datetime.now(UTC)
+    row = db.get(IngestOffset, path)
+    if row is None:
+        db.add(IngestOffset(path=path, inode=inode, offset=offset, updated_at=now))
+    else:
+        row.inode, row.offset, row.updated_at = inode, offset, now

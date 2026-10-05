@@ -21,13 +21,14 @@ from __future__ import annotations
 import re
 from xml.sax.saxutils import escape
 
-from surya_kundal.mapping.engine import DEFAULT_USERNAMES, load_rules
+from surya_kundal.mapping.attack import load_catalog
+from surya_kundal.mapping.engine import DEFAULT_USERNAMES, Rule, load_rules
 
 BASE_ID = 100500
 COMMAND_BASE = 100520
 COMMAND_RULES_START = 100600
 LEVELS = {"low": 4, "medium": 7, "high": 10}
-CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
+DISCOVERY_LEVEL_CAP = 6  # routine reconnaissance (uptime, nproc, df) is not a severe alert
 
 _HEADER = """\
 <!--
@@ -144,6 +145,18 @@ def session_rules() -> list[str]:
             groups="",
         ),
         _rule(
+            BASE_ID + 50,
+            8,
+            "Cowrie: rapid reconnaissance, 4+ discovery commands from one source in 60 seconds",
+            conditions=(
+                "<if_matched_group>discovery</if_matched_group>",
+                "<same_field>src_ip</same_field>",
+            ),
+            technique="T1082",
+            groups="recon,",
+            attrs=' frequency="4" timeframe="60"',
+        ),
+        _rule(
             BASE_ID + 30,
             10,
             "Cowrie: file downloaded into the honeypot",
@@ -185,21 +198,32 @@ def _command_field(pattern: str, scope: str) -> str:
     return f'<field name="input" type="pcre2">{escape(wazuh_pattern(pattern, scope))}</field>'
 
 
+def _is_discovery_only(rule: Rule) -> bool:
+    technique = load_catalog().get(rule.technique)
+    return technique is not None and technique.tactics == ("discovery",)
+
+
+def command_level(rule: Rule) -> int:
+    """Alert level from pattern confidence, capped for plain discovery commands."""
+    level = LEVELS[rule.confidence]
+    return min(level, DISCOVERY_LEVEL_CAP) if _is_discovery_only(rule) else level
+
+
 def command_rules() -> list[str]:
-    """One Wazuh rule per rules.toml entry; high confidence first (first match wins)."""
+    """One Wazuh rule per rules.toml entry; most severe first (first match wins)."""
     numbered = [(COMMAND_RULES_START + i, rule) for i, rule in enumerate(load_rules().rules)]
-    numbered.sort(key=lambda pair: (CONFIDENCE_ORDER[pair[1].confidence], pair[0]))
+    numbered.sort(key=lambda pair: (-command_level(pair[1]), pair[0]))
     return [
         _rule(
             rule_id,
-            LEVELS[rule.confidence],
+            command_level(rule),
             f"Cowrie: {rule.description} [{rule.id}]",
             conditions=(
                 f"<if_sid>{COMMAND_BASE}</if_sid>",
                 _command_field(rule.pattern.pattern, rule.scope),
             ),
             technique=rule.technique,
-            groups="command,",
+            groups="command,discovery," if _is_discovery_only(rule) else "command,",
         )
         for rule_id, rule in numbered
     ]

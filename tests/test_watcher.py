@@ -9,8 +9,9 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from sample_events import SESSION_A, SESSION_A_EVENTS, SESSION_B_EVENTS
+from sample_events import SESSION_A, SESSION_A_EVENTS, SESSION_B_EVENTS, T0
 from surya_kundal import cli, watcher
+from surya_kundal import ingest as ingest_module
 from surya_kundal.cli import main
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
 from surya_kundal.database.models import Command, HoneypotSession
@@ -220,15 +221,80 @@ def test_blank_and_malformed_lines_are_ignored(tmp_path, factory):
     assert _session_count(factory) == 1
 
 
-def test_restarting_replays_the_log_without_duplicating(tmp_path, factory):
+def test_restart_resumes_where_it_stopped(tmp_path, factory):
     log = tmp_path / "cowrie.json"
     _append(log, *(_line(e) for e in SESSION_A_EVENTS))
     Watcher(log, factory).poll_once()
+    _append(log, *(_line(e) for e in SESSION_B_EVENTS))  # arrives while the service is down
 
-    Watcher(log, factory).poll_once()  # a fresh watcher starts from the top again
+    restarted = Watcher(log, factory)
+    assert restarted.poll_once() == len(SESSION_B_EVENTS)  # only the new events
 
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(Command)) == 2
+    assert _session_count(factory) == 2
+
+
+def test_resume_beats_from_end(tmp_path, factory):
+    log = tmp_path / "cowrie.json"
+    _append(log, *(_line(e) for e in SESSION_A_EVENTS))
+    Watcher(log, factory).poll_once()
+    _append(log, *(_line(e) for e in SESSION_B_EVENTS))
+
+    # --from-end must not skip what arrived while the service was stopped.
+    assert Watcher(log, factory, from_end=True).poll_once() == len(SESSION_B_EVENTS)
+
+
+def test_a_replaced_log_is_read_from_the_start(tmp_path, factory):
+    log = tmp_path / "cowrie.json"
+    _append(log, *(_line(e) for e in SESSION_A_EVENTS))
+    Watcher(log, factory).poll_once()
+    log.unlink()
+    _append(log, *(_line(e) for e in SESSION_B_EVENTS))  # new inode
+
+    assert Watcher(log, factory).poll_once() == len(SESSION_B_EVENTS)
+
+
+def test_a_failing_session_is_kept_then_dropped_without_blocking_others(
+    tmp_path, factory, monkeypatch, caplog
+):
+    log = tmp_path / "cowrie.json"
+    _append(log, *(_line(e) for e in SESSION_A_EVENTS + SESSION_B_EVENTS))
+    real = ingest_module.save_session
+
+    def flaky(db, session_id, summary):
+        if session_id == SESSION_A:
+            raise ValueError("poison")
+        return real(db, session_id, summary)
+
+    monkeypatch.setattr("surya_kundal.ingest.save_session", flaky)
+    watch = Watcher(log, factory)
+    watch.poll_once()
+    assert _session_count(factory) == 1  # B stored, A held for retry
+    assert {e["session"] for e in watch._unsaved} == {SESSION_A}
+
+    for _ in range(watcher.MAX_SESSION_ATTEMPTS):
+        watch.poll_once()
+    assert watch._unsaved == []
+    assert "Giving up on session" in caplog.text
+
+
+def test_a_large_log_is_read_in_chunks(tmp_path, factory, monkeypatch):
+    monkeypatch.setattr(watcher, "READ_CHUNK", 64)
+    log = tmp_path / "cowrie.json"
+    _append(log, *(_line(e) for e in SESSION_A_EVENTS))
+
+    assert Watcher(log, factory).poll_once() == len(SESSION_A_EVENTS)
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Command)) == 2
+
+
+def test_a_non_string_session_id_is_skipped(tmp_path, factory):
+    log = tmp_path / "cowrie.json"
+    bad = {"eventid": "cowrie.session.connect", "session": ["x"], "timestamp": T0}
+    _append(log, json.dumps(bad), *(_line(e) for e in SESSION_B_EVENTS))
+
+    Watcher(log, factory).poll_once()  # must not raise or wedge the buffer
     assert _session_count(factory) == 1
 
 

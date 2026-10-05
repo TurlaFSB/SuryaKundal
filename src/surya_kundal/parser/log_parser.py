@@ -43,8 +43,8 @@ def group_by_session(events: Iterable[dict]) -> dict[str, list[dict]]:
     sessions: defaultdict[str, list[dict]] = defaultdict(list)
     for event in events:
         session_id = event.get("session")
-        if session_id is None:
-            logger.warning("Skipping event without a session ID: %s", event.get("eventid"))
+        if not isinstance(session_id, str) or not session_id:
+            logger.warning("Skipping event without a usable session ID: %s", event.get("eventid"))
             continue
         sessions[session_id].append(event)
     return sessions

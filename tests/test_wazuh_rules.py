@@ -46,7 +46,7 @@ def _matches_field(element: ET.Element, event: dict) -> bool:
 
 def fire(event: dict) -> int | None:
     """Return the id of the deepest, first-matching non-frequency rule, as Wazuh would."""
-    rules = [r for r in _rules() if r.find("if_matched_sid") is None]
+    rules = [r for r in _rules() if "frequency" not in r.attrib]
 
     def holds(rule: ET.Element) -> bool:
         if rule.find("decoded_as") is not None and rule.find("decoded_as").text != "json":
@@ -78,7 +78,7 @@ def test_rules_are_valid_unique_and_use_known_techniques() -> None:
         assert 100000 <= int(rule.attrib["id"]) <= 120000  # Wazuh's custom-rule range
         for mitre in rule.findall("mitre/id"):
             assert mitre.text in catalog, mitre.text
-    assert len(rules) == 11 + len(load_rules().rules)
+    assert len(rules) == 12 + len(load_rules().rules)
 
 
 def test_committed_file_matches_the_generator() -> None:
@@ -125,16 +125,30 @@ def test_not_examples_do_not_fire_their_own_rule() -> None:
             assert fire(event("command.input", input=command)) != own, (rule.id, command)
 
 
-def test_high_confidence_rules_are_listed_first() -> None:
+def test_most_severe_rules_are_listed_first() -> None:
     levels = [
         int(r.attrib["level"]) for r in _rules() if int(r.attrib["id"]) >= COMMAND_RULES_START
     ]
     assert levels == sorted(levels, reverse=True)
 
 
+def test_routine_discovery_is_capped_below_the_severe_levels() -> None:
+    by_id = {r.attrib["id"]: r for r in _rules()}
+    uptime = fire(event("command.input", input="uptime"))
+    assert uptime is not None and int(by_id[str(uptime)].attrib["level"]) <= 6
+
+
+def test_fingerprinting_probes_alert_high() -> None:
+    for command in ("dmesg", "cat /proc/1/cgroup", "cat /proc/cpuinfo | grep hypervisor"):
+        fired = fire(event("command.input", input=command))
+        assert fired is not None
+        rule = next(r for r in _rules() if r.attrib["id"] == str(fired))
+        assert rule.find("mitre/id").text == "T1497", command
+
+
 def test_frequency_rules_are_well_formed() -> None:
     freq = [r for r in _rules() if "frequency" in r.attrib]
-    assert {r.attrib["id"] for r in freq} == {"100511", "100512"}
+    assert {r.attrib["id"] for r in freq} == {"100511", "100512", "100550"}
     for rule in freq:
         assert rule.find("same_field").text == "src_ip"
         assert int(rule.attrib["timeframe"]) > 0

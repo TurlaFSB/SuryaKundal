@@ -26,7 +26,7 @@ id = "discovery-system-files"
 technique = "T1082"
 confidence = "high"
 description = "Reading kernel and distribution information files"
-pattern = '''^(cat|head|tail|less|more|grep)\s+.*(/proc/(cpuinfo|meminfo|version|uptime|mounts|loadavg|partitions)|/etc/(os-release|issue|[a-z]+[-_]release|hostname))'''
+pattern = '''^(cat|head|tail|less|more|grep)\s+.*(/proc/(cpuinfo|meminfo|version|uptime|mounts|loadavg|partitions|cmdline|self/mounts|1/mounts)|/etc/(os-release|issue|[a-z]+[-_]release|hostname))'''
 examples = ["cat /proc/cpuinfo", "cat /proc/cpuinfo | grep name | wc -l", "cat /etc/os-release", "cat /proc/mounts"]
 not_examples = ["cat /etc/passwd", "ls /proc/cpuinfo"]
 
@@ -177,11 +177,20 @@ not_examples = ["chage -M 99999 root"]
 [[rule]]
 id = "discovery-virtualization"
 technique = "T1497"
-confidence = "medium"
-description = "Checking whether the host is a VM or sandbox"
-pattern = '''^(systemd-detect-virt|virt-what)(\s|$)|^(grep|egrep)\s+.*(hypervisor|vmware|virtualbox|qemu|kvm)'''
-examples = ["systemd-detect-virt", "virt-what", "grep -i hypervisor /proc/cpuinfo"]
-not_examples = ["grep root /etc/passwd"]
+confidence = "high"
+description = "Checking whether the host is a VM, container or sandbox"
+pattern = '''^(systemd-detect-virt|virt-what|dmesg|dmidecode|lspci|lsmod)(\s|$)|^(grep|egrep)\s+.*(hypervisor|vmware|virtualbox|qemu|kvm)|^(cat|head|less|more|grep|ls|stat|test|\[)\s+.*(/proc/(1|self)/(cgroup|sched|environ)|/sys/class/dmi|/sys/hypervisor|/proc/(scsi|ide)\b|/\.dockerenv|/run/\.containerenv)'''
+examples = ["systemd-detect-virt", "virt-what", "grep -i hypervisor /proc/cpuinfo", "dmesg", "dmesg | grep -i virtual", "cat /proc/1/cgroup", "cat /proc/self/cgroup", "cat /sys/class/dmi/id/product_name", "cat /sys/hypervisor/type", "ls /.dockerenv", "lspci", "dmidecode -s system-product-name"]
+not_examples = ["grep root /etc/passwd", "cat /etc/passwd"]
+
+[[rule]]
+id = "discovery-ssh-version"
+technique = "T1518"
+confidence = "low"
+description = "Checking the installed SSH version (a common honeypot-fingerprinting probe)"
+pattern = '''^ssh\s+-[A-Za-z]*V\b'''
+examples = ["ssh -V", "ssh  -V", "ssh -vV"]
+not_examples = ["ssh root@10.0.0.2"]
 
 # ------------------------------------------------------- Credential access
 
@@ -506,9 +515,9 @@ id = "lateral-ssh"
 technique = "T1021.004"
 confidence = "medium"
 description = "Connecting onward over SSH"
-pattern = '''^(ssh|sshpass|scp|sftp)\s+(?!-V)'''
+pattern = '''^(ssh|sshpass|scp|sftp)\s++(?!-[A-Za-z]*V\b)'''
 examples = ["ssh root@10.0.0.2", "sshpass -p x ssh root@h", "scp a.sh root@h:/tmp"]
-not_examples = ["ssh-keygen -t rsa", "sshd"]
+not_examples = ["ssh-keygen -t rsa", "sshd", "ssh -V", "ssh  -V", "ssh -vV"]
 
 [[rule]]
 id = "exec-decode-payload"

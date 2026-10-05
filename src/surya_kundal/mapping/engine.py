@@ -137,11 +137,25 @@ _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+")
 _WRAPPERS = re.compile(
     r"^(?:sudo(?:\s+-\S+)*|nohup|time|exec|env|setsid|stdbuf\s+-\S+|busybox(?=\s+[a-z]))\s+"
 )
+# ``( cmd )``, ``{ cmd; }``, ``then cmd`` and a backslash before a name (``\\wget``, used to
+# skip aliases) do not change what runs.
+_LEADING_NOISE = re.compile(r"^(?:[({]\s*|(?:then|do|else|elif)\s+|\\(?=\S))")
+# ``bash -c 'inner command'``: the real command is the quoted argument.
+_SHELL_C = re.compile(
+    r"^(?:ba|da|a|z|k)?sh\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c\s+(?P<q>['\"])(?P<body>.*)(?P=q)\s*$",
+    re.DOTALL,
+)
+MAX_SHELL_DEPTH = 3
 _SYSTEM_BIN_DIR = re.compile(r"^/(?:usr/)?(?:local/)?s?bin/")
 
 
-def split_commands(command: str) -> list[str]:
-    """Split a shell line into simple commands, respecting quotes."""
+def split_commands(command: str, *, respect_quotes: bool = True) -> list[str]:
+    """Split a shell line into simple commands, respecting quotes.
+
+    A quote that is never closed would swallow the rest of the line (``echo "x; uname
+    -a``), so the line is split again ignoring quotes; extra pieces are better than
+    a hidden command.
+    """
     segments: list[str] = []
     current: list[str] = []
     quote: str | None = None
@@ -156,7 +170,7 @@ def split_commands(command: str) -> list[str]:
             if ch == quote:
                 quote = None
             current.append(ch)
-        elif ch in "\"'":
+        elif ch in "\"'" and respect_quotes:
             quote = ch
             current.append(ch)
         elif ch in ";\n|" or (ch == "&" and not _is_redirect(command, i)):
@@ -165,6 +179,8 @@ def split_commands(command: str) -> list[str]:
         else:
             current.append(ch)
         i += 1
+    if quote is not None:
+        return split_commands(command, respect_quotes=False)
     segments.append("".join(current))
     return [s.strip() for s in segments if s.strip()]
 
@@ -186,19 +202,25 @@ def normalize_segment(segment: str) -> str:
     changed = True
     while changed:
         changed = False
-        for pattern in (_ENV_ASSIGN, _SYSTEM_BIN_DIR, _WRAPPERS):
+        for pattern in (_LEADING_NOISE, _ENV_ASSIGN, _SYSTEM_BIN_DIR, _WRAPPERS):
             stripped = pattern.sub("", text, count=1)
             if stripped != text:
                 text, changed = stripped, True
     return text
 
 
-def _segments_of(command: str) -> list[str]:
+def _segments_of(command: str, depth: int = 0) -> list[str]:
     pieces = split_commands(command)
     for match in _SUBSTITUTION.finditer(command):
         inner = match.group(1) or match.group(2) or ""
         pieces.extend(split_commands(inner))
-    return [normalize_segment(p) for p in pieces]
+    segments = [normalize_segment(p) for p in pieces]
+    if depth < MAX_SHELL_DEPTH:
+        for segment in list(segments):
+            wrapped = _SHELL_C.match(segment)
+            if wrapped:
+                segments.extend(_segments_of(wrapped.group("body"), depth + 1))
+    return segments
 
 
 def bound_command(command: str) -> str:
