@@ -235,6 +235,7 @@ def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
 
 def _run_llm(args: argparse.Namespace, settings: Settings) -> int:
     client = OllamaClient(args.url or settings.ollama_url)
+    print(f"Connecting to {client.base_url} ...", file=sys.stderr)
     try:
         installed = client.models()
         print(f"Connected to {client.base_url}. Installed: {', '.join(installed) or 'none'}")

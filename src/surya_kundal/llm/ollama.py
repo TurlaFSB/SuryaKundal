@@ -91,7 +91,8 @@ class OllamaClient:
 
     def models(self) -> list[str]:
         """Names of the models installed on the server."""
-        body = self._request("GET", "/api/tags")
+        # Listing models is instant on a healthy server, so do not wait minutes for it.
+        body = self._request("GET", "/api/tags", timeout=httpx.Timeout(10.0, connect=5.0))
         items = body.get("models")
         if not isinstance(items, list):
             raise LLMError("unexpected reply from the model server")
