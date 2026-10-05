@@ -22,6 +22,7 @@ DEFAULT_DATABASE_URL = "sqlite:///data/surya_kundal.db"
 DEFAULT_GEOIP_DIR = "data/geoip"
 DEFAULT_TOR_CACHE = "data/tor_exit_nodes.txt"
 DEFAULT_WAZUH_ALERTS = "data/wazuh_alerts.jsonl"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,8 @@ class Settings:
     virustotal_api_key: str
     wazuh_alerts_path: Path
     dashboard_token: str
+    ollama_url: str
+    ollama_model: str
     log_level: str
 
     @classmethod
@@ -56,6 +59,8 @@ class Settings:
             virustotal_api_key=get("VIRUSTOTAL_API_KEY"),
             wazuh_alerts_path=Path(get("WAZUH_ALERTS_PATH", DEFAULT_WAZUH_ALERTS)).expanduser(),
             dashboard_token=get("DASHBOARD_TOKEN"),
+            ollama_url=get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
+            ollama_model=get("OLLAMA_MODEL"),
             log_level=get("LOG_LEVEL", "INFO").upper(),
         )
 

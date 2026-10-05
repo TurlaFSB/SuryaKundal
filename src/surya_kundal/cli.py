@@ -29,6 +29,7 @@ from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
 from surya_kundal.enrichment.http import ProviderError
 from surya_kundal.ingest import ingest_log
+from surya_kundal.llm.ollama import LLMError, OllamaClient, check_model
 from surya_kundal.mapping.attack import load_catalog
 from surya_kundal.mapping.store import map_pending
 from surya_kundal.pipeline import build_providers, run_enrichment
@@ -111,6 +112,12 @@ def _build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--port", type=int, default=8080)
     dash.add_argument("--alerts", type=Path, default=None, help="Wazuh alert export (JSON lines)")
     _add_db_option(dash)
+
+    llm = sub.add_parser("llm", help="check the local Ollama models (optional)")
+    llm_sub = llm.add_subparsers(dest="llm_action", required=True)
+    check = llm_sub.add_parser("check", help="test the connection and time each model")
+    check.add_argument("--url", default=None, help="Ollama URL (default: $OLLAMA_URL)")
+    check.add_argument("--model", action="append", default=None, help="model to test (repeatable)")
 
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
@@ -217,6 +224,33 @@ def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
     )
     serve(app, host=args.host, port=args.port, threads=4)
     return 0
+
+
+def _run_llm(args: argparse.Namespace, settings: Settings) -> int:
+    client = OllamaClient(args.url or settings.ollama_url)
+    try:
+        installed = client.models()
+        print(f"Connected to {client.base_url}. Installed: {', '.join(installed) or 'none'}")
+        wanted = args.model or ([settings.ollama_model] if settings.ollama_model else installed)
+        failed = False
+        for name in wanted:
+            if name not in installed:
+                print(f"  {printable(name)}: not installed (ollama pull {printable(name)})")
+                failed = True
+                continue
+            print(f"  {printable(name)}: loading and generating (first run can take a minute) ...")
+            result, valid = check_model(client, name)
+            speed = f"{result.tokens_per_second:.1f} tok/s" if result.tokens_per_second else "?"
+            print(
+                f"    {result.seconds:.1f}s total, {speed}, JSON {'valid' if valid else 'INVALID'}"
+            )
+            failed |= not valid
+        return 1 if failed else 0
+    except LLMError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    finally:
+        client.close()
 
 
 def _log_path(args: argparse.Namespace, settings: Settings) -> Path:
@@ -459,6 +493,7 @@ def main(argv: list[str] | None = None) -> int:
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
         "dashboard": _run_dashboard,
+        "llm": _run_llm,
     }
     try:
         return handlers[args.action](args, settings)
