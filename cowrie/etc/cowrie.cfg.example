@@ -1,0 +1,97 @@
+# Surya Kundal: Cowrie 3.x override file (only options that differ from the
+# defaults in cowrie.cfg.dist).
+#
+# Cowrie merges this over its bundled defaults, so it only needs the keys it
+# changes. deploy.sh installs it as <cowrie>/etc/cowrie.cfg after filling in
+# the two placeholders (the Cowrie directory and the boot offset). Every
+# option name below was checked
+# against src/cowrie/data/etc/cowrie.cfg.dist and the code that reads it in
+# Cowrie 3.1.1 (see README.md for the list).
+#
+# Persona (must stay consistent): Debian GNU/Linux 12 (bookworm), point
+# release 12.15, kernel 6.1.0-50-amd64 = linux 6.1.176-1, OpenSSH
+# 1:9.2p1-2+deb12u10 and OpenSSL 3.0.20, all of which were the real bookworm
+# versions as checked on 2026-10-05. If you change one, re-check the others.
+
+[honeypot]
+# Hostname for the shell prompt and uname. Cowrie's default is "svr04", a
+# well-known honeypot giveaway (Vetterl & Clayton found the default name
+# on hundreds of honeypots). It must equal honeyfs-overlay/etc/hostname,
+# because Cowrie does NOT derive /etc/hostname from this setting.
+hostname = stg-util02
+
+# Seconds between the emulated "boot" and Cowrie's start; uptime, /proc/uptime
+# and last are derived from it. Default is random 1-90 days chosen at every
+# start, so a restart changes it silently. deploy.sh picks one value per
+# deployment and keeps ps's START column and `top` in step with it.
+boot_offset = @BOOT_OFFSET@
+
+# Real sshd has no idle timeout (ClientAliveInterval defaults to 0). Cowrie
+# disconnects an idle shell after 180 s, which a patient operator will notice.
+# Trade-off: idle sessions hold resources for longer.
+idle_timeout = 900
+
+# Cap stored downloads (bytes). Real payloads are rarely larger; this stops a
+# hostile `wget` from filling the VM disk. (Option exists in the dist as a
+# commented example.)
+download_limit_size = 33554432
+
+# Text-command output overrides (df, mount, dmesg, lscpu, top, getconf).
+# Cowrie's bundled ones describe a 2009 Debian 5 box (dmesg), an ext3
+# /dev/sda1 (mount) or are plain broken (df: "Exec format error").
+txtcmds_path = @COWRIE_HOME@/suryakundal/txtcmds
+
+[shell]
+# Custom filesystem pickle built by tools/build_fs.py (no /.dockerenv, no
+# "phil", /etc/hostname == prompt, contents and sizes consistent).
+filesystem = @COWRIE_HOME@/suryakundal/fs.pickle
+
+# Custom `ps` list (kernel 6.1 threads, systemd, no VirtualBox, sizes in KiB).
+processes = @COWRIE_HOME@/suryakundal/cmdoutput.json
+
+# `uname -a`. Defaults are kernel 6.1.0-21 / 6.1.90-1, i.e. what every
+# default Cowrie reports. These are the real Debian bookworm values for
+# linux 6.1.176-1 (build date taken from a real image, see FINGERPRINTING.md).
+kernel_version = 6.1.0-50-amd64
+kernel_build_string = #1 SMP PREEMPT_DYNAMIC Debian 6.1.176-1 (2026-07-02)
+# hardware_platform = x86_64 and operating_system = GNU/Linux are already the
+# defaults and are correct, so they are not repeated.
+
+# What `ssh -V` prints inside the shell. Default is OpenSSH_7.9p1 / OpenSSL
+# 1.1.1a, which contradicts the 9.2p1 banner below.
+ssh_version = OpenSSH_9.2p1 Debian-2+deb12u10, OpenSSL 3.0.20 7 Apr 2026
+
+[ssh]
+# Banner sent to clients: "SSH-2.0-OpenSSH_<upstream> <Debian version>". On
+# Debian, <Debian version> is "Debian-" + the package revision without the
+# epoch, i.e. package 1:9.2p1-2+deb12u10 -> "Debian-2+deb12u10". The dist
+# default (deb12u3) is what every unconfigured Cowrie advertises.
+version = SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u10
+
+# Only offer what a stock OpenSSH 9.2 server also offers AND Twisted can do.
+# Cowrie's default list includes 3des-cbc, cast128-cbc, aes*-cbc and hmac-md5,
+# none of which OpenSSH 9.2 offers by default, and hmac-sha2-384, which
+# OpenSSH never implemented. Twisted cannot do chacha20-poly1305 or AES-GCM,
+# so the server-side algorithm list still differs from real OpenSSH (see
+# FINGERPRINTING.md). Trade-off: very old clients that only speak CBC fail.
+ciphers = aes128-ctr,aes192-ctr,aes256-ctr
+macs = hmac-sha2-256,hmac-sha2-512,hmac-sha1
+compression = none,zlib@openssh.com
+
+[output_jsonlog]
+# Already true in the dist; kept explicit so a future dist change cannot
+# silently turn the log off. Path default: <cowrie>/var/log/cowrie/cowrie.json
+enabled = true
+
+# ---------------------------------------------------------------------------
+# Deliberately left at their defaults
+# ---------------------------------------------------------------------------
+# [ssh] listen_endpoints = tcp:2222:interface=0.0.0.0   (default is already 2222)
+# [ssh] sftp_enabled = true      real Debian sshd ships the sftp subsystem; uploads are captured
+# [ssh] forwarding = true        accepted but discarded and logged (FakeForwardingChannel)
+# [ssh] auth_none_enabled / auth_publickey_allow_any / auth_keyboard_interactive_enabled = false
+#                                Debian's sshd offers publickey,password: this matches
+# [telnet] enabled = false
+# [honeypot] auth_class = UserDB  (userdb.txt, see userdb.example.txt)
+# [honeypot] fake_addr, internet_facing_ip, out_addr: optional, unset on purpose
+# [honeypot] contents_path: not used; the overlay is baked into fs.pickle instead

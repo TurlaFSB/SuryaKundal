@@ -1,0 +1,55 @@
+[    0.000000] Linux version 6.1.0-50-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.176-1 (2026-07-02)
+[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-50-amd64 root=UUID=@ROOT_UUID@ ro quiet
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000000f0000-0x00000000000fffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x00000000bffdbfff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000bffdc000-0x00000000bfffffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000feffc000-0x00000000feffffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fffc0000-0x00000000ffffffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000013fffffff] usable
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] SMBIOS 2.8 present.
+[    0.000000] DMI: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.16.3-0-ga6ed6b701f0a-prebuilt.qemu.org 04/01/2014
+[    0.000000] Hypervisor detected: KVM
+[    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[    0.000001] kvm-clock: using sched offset of 6412731102 cycles
+[    0.000004] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[    0.000010] tsc: Detected 2499.998 MHz processor
+[    0.000590] last_pfn = 0x140000 max_arch_pfn = 0x400000000
+[    0.011207] Zone ranges:
+[    0.011208]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.011210]   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+[    0.011212]   Normal   [mem 0x0000000100000000-0x000000013fffffff]
+[    0.011214]   Device   empty
+[    0.011320] Memory: 3877504K/4193784K available (14342K kernel code, 2336K rwdata, 9084K rodata, 2788K init, 17588K bss, 316020K reserved, 0K cma-reserved)
+[    0.011998] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.012740] rcu: Preemptible hierarchical RCU implementation.
+[    0.040226] Calibrating delay loop (skipped) preset value.. 4999.99 BogoMIPS (lpj=2499998)
+[    0.040231] CPU0: Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz (family: 0x6, model: 0x55, stepping: 0x7)
+[    0.080238] smpboot: Total of 2 processors activated (9999.99 BogoMIPS)
+[    0.112304] devtmpfs: initialized
+[    0.116718] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.121930] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.140822] PCI: Using configuration type 1 for base access
+[    0.202118] ACPI: Added _OSI(Module Device)
+[    0.286701] pci 0000:00:01.1: reg 0x20: [io  0xc0c0-0xc0cf]
+[    0.318115] clocksource: Switched to clocksource kvm-clock
+[    0.331845] NET: Registered PF_INET protocol family
+[    0.349207] Initialise system trusted keyrings
+[    0.352410] Key type asymmetric registered
+[    0.377981] Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled
+[    0.388102] virtio_blk virtio1: [vda] 83886080 512-byte logical blocks (42.9 GB/40.0 GiB)
+[    0.390417]  vda: vda1
+[    0.455820] EXT4-fs (vda1): mounted filesystem with ordered data mode. Quota mode: none.
+[    0.455830] VFS: Mounted root (ext4 filesystem) readonly on device 254:1.
+[    0.468815] Run /sbin/init as init process
+[    0.690231] systemd[1]: systemd 252.39-1~deb12u1 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[    0.690260] systemd[1]: Detected virtualization kvm.
+[    0.690263] systemd[1]: Detected architecture x86-64.
+[    0.690842] systemd[1]: Hostname set to <stg-util02>.
+[    1.012387] systemd[1]: Queued start job for default target graphical.target.
+[    1.231902] EXT4-fs (vda1): re-mounted. Quota mode: none.
+[    1.402619] systemd-journald[187]: Received client request to flush runtime journal.
+[    2.118305] random: crng init done

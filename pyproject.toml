@@ -76,3 +76,7 @@ select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "C4", "PT", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 # Tests use assert, fake passwords and fake /tmp paths on purpose.
 "tests/*" = ["S101", "S106", "S108", "PT018", "RUF005"]
+# Operator tool run by hand against Cowrie's own bundled fs.pickle: it unpickles that
+# trusted file, calls openssl with a fixed argument list, and uses the random module only
+# to vary cosmetic details per deployment (not for secrets).
+"cowrie/tools/*" = ["S301", "S311", "S603", "S607", "UP031", "E501"]

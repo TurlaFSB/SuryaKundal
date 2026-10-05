@@ -1,0 +1,36 @@
+# Surya Kundal credential policy for Cowrie 3.x.
+# Install as <cowrie>/etc/userdb.txt (deploy.sh does this).
+#
+# Syntax, verified against cowrie/core/auth.py in Cowrie 3.1.1:
+#   username:x:password
+#   - three ':' separated fields; field 2 is unused (keep "x")
+#   - '*' in field 1 or 3 matches anything
+#   - a password starting with '!' DENIES that password
+#   - /regex/ or /regex/i is a regular expression (re.search, so anchor it)
+#   - lines starting with '#' and malformed/short lines are ignored
+#   - the file is read as ASCII; a password cannot contain ':'
+#   - the FIRST matching line wins; a login that matches nothing is REFUSED
+#
+# Why this differs from Cowrie's built-in policy: the default accepts "root"
+# with ANY password ("root:x:*") and a couple of fixed users. A scanner that
+# logs in as root with a random password and succeeds has found a honeypot
+# in one request. Here only the pairs below succeed, everything else is
+# refused, which is also how a real box with weak-but-specific passwords
+# behaves.
+#
+# Every accepted user MUST exist in honeyfs-overlay/etc/passwd (build_fs.py
+# refuses to build otherwise): accepting a login that has no passwd entry is
+# a tell. The exact passwords below are also hashed into the generated
+# /etc/shadow, so a cracked hash matches what the attacker typed.
+#
+# Choose your own pairs per deployment (see FINGERPRINTING.md). Keep them
+# "believable weak": not the first ten entries of every wordlist, but inside
+# the first few thousand. Passwords must not contain ':' and (for the
+# shadow hash) must not be regex rules.
+
+root:x:Passw0rd!
+deploy:x:deploy123
+ops:x:Welcome1!
+
+# Nothing else matches, so everything else is refused. There is deliberately
+# no "*:x:*" line.

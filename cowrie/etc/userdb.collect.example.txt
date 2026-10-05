@@ -1,0 +1,46 @@
+# Surya Kundal credential policy "collect": accepts a few dozen common weak
+# passwords for root (plus the two service accounts), so that internet scanners
+# working through a typical wordlist get in after a handful of tries and you
+# record their sessions. Everything not listed is still refused, so a scanner
+# that tests a random password does not succeed on the first request.
+#
+# Use userdb.example.txt ("stealth", three exact pairs) instead when the goal is
+# to look as much like a real hardened-but-weak box as possible and you accept
+# that very few automated attackers will get in.
+#
+# Syntax and rules: see userdb.example.txt. Two extra points for this file:
+#   * every accepted user must exist in honeyfs-overlay/etc/passwd;
+#   * for each user, the LAST line is the password hashed into /etc/shadow, so
+#     keep the one you want an attacker to "crack" last.
+
+root:x:toor
+root:x:admin
+root:x:1234
+root:x:12345
+root:x:123456789
+root:x:1234567890
+root:x:qwerty
+root:x:password
+root:x:passw0rd
+root:x:P@ssw0rd
+root:x:Password1
+root:x:Passw0rd1
+root:x:admin123
+root:x:root123
+root:x:root1234
+root:x:abc123
+root:x:letmein
+root:x:changeme
+root:x:Changeme1
+root:x:test123
+root:x:server
+root:x:ubuntu
+root:x:debian
+root:x:Welcome1
+root:x:Admin@123
+root:x:Passw0rd!
+deploy:x:deploy
+deploy:x:deploy123
+ops:x:ops
+ops:x:ops123
+ops:x:Welcome1!
