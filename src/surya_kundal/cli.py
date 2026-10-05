@@ -29,7 +29,8 @@ from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
 from surya_kundal.enrichment.http import ProviderError
 from surya_kundal.ingest import ingest_log
-from surya_kundal.llm.ollama import LLMError, OllamaClient, check_model
+from surya_kundal.llm.analyst import analyze_session
+from surya_kundal.llm.ollama import DEFAULT_MODEL, LLMError, OllamaClient, check_model
 from surya_kundal.mapping.attack import load_catalog
 from surya_kundal.mapping.store import map_pending
 from surya_kundal.pipeline import build_providers, run_enrichment
@@ -112,6 +113,12 @@ def _build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--port", type=int, default=8080)
     dash.add_argument("--alerts", type=Path, default=None, help="Wazuh alert export (JSON lines)")
     _add_db_option(dash)
+
+    analyze = sub.add_parser("analyze", help="have a local model describe one session (optional)")
+    analyze.add_argument("session_id", help="session ID, or a unique prefix of it")
+    analyze.add_argument("--url", default=None, help="Ollama URL (default: $OLLAMA_URL)")
+    analyze.add_argument("--model", default=None, help="model (default: $OLLAMA_MODEL)")
+    _add_db_option(analyze)
 
     llm = sub.add_parser("llm", help="check the local Ollama models (optional)")
     llm_sub = llm.add_subparsers(dest="llm_action", required=True)
@@ -251,6 +258,40 @@ def _run_llm(args: argparse.Namespace, settings: Settings) -> int:
         return 2
     finally:
         client.close()
+
+
+def _run_analyze(args: argparse.Namespace, settings: Settings) -> int:
+    model = args.model or settings.ollama_model or DEFAULT_MODEL
+    with _open_database(args, settings)() as db:
+        found = db.scalars(
+            select(HoneypotSession).where(
+                HoneypotSession.id.startswith(args.session_id, autoescape=True)
+            )
+        ).all()
+        if len(found) != 1:
+            reason = "no session" if not found else "more than one session"
+            print(f"error: {reason} matches {printable(args.session_id)!r}", file=sys.stderr)
+            return 2
+        session = found[0]
+        matches = list(
+            db.scalars(select(TechniqueMatch).where(TechniqueMatch.session_id == session.id))
+        )
+        client = OllamaClient(args.url or settings.ollama_url)
+        try:
+            result = analyze_session(client, model, session, matches)
+        except LLMError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        finally:
+            client.close()
+        print(f"Session {printable(session.id)} (machine-generated analysis, unverified)")
+        print(f"  {result.summary}")
+        print(
+            f"  intent: {result.intent}   sophistication: {result.sophistication}   "
+            f"confidence: {result.confidence}"
+        )
+        print(f"  model: {printable(result.model)}, {result.seconds:.1f}s")
+    return 0
 
 
 def _log_path(args: argparse.Namespace, settings: Settings) -> Path:
@@ -494,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
         "wazuh-rules": _run_wazuh_rules,
         "dashboard": _run_dashboard,
         "llm": _run_llm,
+        "analyze": _run_analyze,
     }
     try:
         return handlers[args.action](args, settings)

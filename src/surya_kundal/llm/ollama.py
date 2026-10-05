@@ -24,6 +24,7 @@ from surya_kundal.textsafe import printable
 # Generation on a laptop CPU or small GPU is slow; connecting should still fail fast.
 DEFAULT_TIMEOUT = httpx.Timeout(300.0, connect=5.0)
 MAX_RESPONSE_CHARS = 20_000
+DEFAULT_MODEL = "qwen2.5-coder:7b"  # about 5x faster than the 14b on a 6 GB GPU
 
 
 class LLMError(Exception):
