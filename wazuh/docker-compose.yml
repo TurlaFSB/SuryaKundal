@@ -1,0 +1,20 @@
+# Wazuh manager only (no indexer or dashboard): about 1 GB of RAM. It decodes and
+# alerts; alerts are written to alerts.json and can be shown by Surya Kundal itself.
+# Run from this directory:  docker compose up -d
+services:
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.14.7   # keep equal to or newer than the agent version
+    container_name: surya-wazuh-manager
+    restart: unless-stopped
+    hostname: surya-wazuh-manager
+    ports:
+      - "127.0.0.1:1514:1514"   # agent events
+      - "127.0.0.1:1515:1515"   # agent enrolment
+      - "127.0.0.1:55000:55000" # manager API
+    volumes:
+      - ./rules/surya_kundal_cowrie_rules.xml:/var/ossec/etc/rules/surya_kundal_cowrie_rules.xml:ro
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+volumes:
+  wazuh_logs:
+  wazuh_queue:

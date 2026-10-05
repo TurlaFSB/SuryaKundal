@@ -102,6 +102,9 @@ def _build_parser() -> argparse.ArgumentParser:
     show.add_argument("session_id", help="session ID, or a unique prefix of it")
     _add_db_option(show)
 
+    wazuh = sub.add_parser("wazuh-rules", help="generate the Wazuh rules for Cowrie's log")
+    wazuh.add_argument("--output", type=Path, default=None, help="write here instead of stdout")
+
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
     update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
@@ -117,6 +120,18 @@ def _open_database(args: argparse.Namespace, settings: Settings) -> sessionmaker
     engine = create_db_engine(args.db or settings.database_url)
     init_db(engine)
     return make_session_factory(engine)
+
+
+def _run_wazuh_rules(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal.wazuh import generate_rules_xml
+
+    xml = generate_rules_xml()
+    if args.output is None:
+        print(xml, end="")
+    else:
+        args.output.write_text(xml, encoding="utf-8")
+        print(f"Wrote {args.output}")
+    return 0
 
 
 def _stop_on_signals() -> threading.Event:
@@ -403,6 +418,7 @@ def main(argv: list[str] | None = None) -> int:
         "map": _run_map,
         "techniques": _run_techniques,
         "show": _run_show,
+        "wazuh-rules": _run_wazuh_rules,
     }
     return handlers[args.action](args, settings)
 
