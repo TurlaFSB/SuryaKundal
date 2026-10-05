@@ -59,6 +59,15 @@ def test_bad_replies_raise_llmerror(response, message):
         _client(lambda r: response).models()
 
 
+def test_server_error_reason_is_shown_and_sanitised():
+    reply = httpx.Response(500, json={"error": "model requires more memory\x1b[2J"})
+    with pytest.raises(LLMError, match=r"HTTP 500: model requires more memory\\x1b"):
+        _client(lambda r: reply).models()
+    with pytest.raises(LLMError) as plain:
+        _client(lambda r: httpx.Response(500, json={"error": 5})).models()
+    assert str(plain.value) == "the model server returned HTTP 500"
+
+
 def test_missing_text_and_network_failures():
     with pytest.raises(LLMError, match="no text"):
         _client(lambda r: httpx.Response(200, json={"x": 1})).generate("m", "p")

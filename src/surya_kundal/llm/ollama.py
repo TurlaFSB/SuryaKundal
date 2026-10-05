@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+from surya_kundal.textsafe import printable
+
 # Generation on a laptop CPU or small GPU is slow; connecting should still fail fast.
 DEFAULT_TIMEOUT = httpx.Timeout(300.0, connect=5.0)
 MAX_RESPONSE_CHARS = 20_000
@@ -41,6 +43,15 @@ def _clean_url(url: str) -> str:
     if not url.startswith(("http://", "https://")):
         raise LLMError("OLLAMA_URL must start with http:// or https://")
     return url
+
+
+def _reason(response: httpx.Response) -> str:
+    """The server's own explanation (Ollama sends {"error": "..."}), made safe to print."""
+    try:
+        detail = response.json().get("error")
+    except (ValueError, AttributeError):
+        return ""
+    return f": {printable(detail, limit=300)}" if isinstance(detail, str) and detail else ""
 
 
 class OllamaClient:
@@ -66,7 +77,9 @@ class OllamaClient:
         if response.status_code == 404:
             raise LLMError("model not found; check the name with `ollama list`")
         if response.status_code >= 400:
-            raise LLMError(f"the model server returned HTTP {response.status_code}")
+            raise LLMError(
+                f"the model server returned HTTP {response.status_code}" + _reason(response)
+            )
         try:
             body = response.json()
         except ValueError as exc:
