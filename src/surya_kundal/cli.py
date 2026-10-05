@@ -277,6 +277,11 @@ def _run_analyze(args: argparse.Namespace, settings: Settings) -> int:
             db.scalars(select(TechniqueMatch).where(TechniqueMatch.session_id == session.id))
         )
         client = OllamaClient(args.url or settings.ollama_url)
+        print(
+            f"Asking {printable(model)} (the first call loads the model; allow up to a few "
+            "minutes) ...",
+            file=sys.stderr,
+        )
         try:
             result = analyze_session(client, model, session, matches)
         except LLMError as error:
