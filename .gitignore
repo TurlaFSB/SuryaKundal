@@ -21,7 +21,7 @@ tty/
 # Database and local data
 *.db
 *.sqlite3
-data/
+/data/
 
 # Editor / OS
 .vscode/
