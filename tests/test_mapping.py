@@ -178,7 +178,8 @@ def test_persistence_and_cleanup_commands():
 
 def test_a_well_known_ssh_key_planting_one_liner():
     line = (
-        'cd ~ && rm -rf .ssh && mkdir .ssh && echo "ssh-rsa AAAAB3Nza attacker">>.ssh/authorized_keys'
+        "cd ~ && rm -rf .ssh && mkdir .ssh"
+        ' && echo "ssh-rsa AAAAB3Nza attacker">>.ssh/authorized_keys'
         " && chmod -R go= ~/.ssh"
     )
 
