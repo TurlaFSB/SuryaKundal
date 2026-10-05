@@ -83,7 +83,7 @@ def session_rules() -> list[str]:
             3,
             "Cowrie: connection to the honeypot",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("session.connect")),
-            groups="cowrie,honeypot,",
+            groups="",
         ),
         _rule(
             BASE_ID + 10,
@@ -91,7 +91,7 @@ def session_rules() -> list[str]:
             "Cowrie: failed SSH login",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("login.failed")),
             technique="T1110.001",
-            groups="cowrie,honeypot,authentication_failed,",
+            groups="authentication_failed,",
         ),
         _rule(
             BASE_ID + 11,
@@ -102,7 +102,7 @@ def session_rules() -> list[str]:
                 "<same_field>src_ip</same_field>",
             ),
             technique="T1110.001",
-            groups="cowrie,honeypot,authentication_failures,",
+            groups="authentication_failures,",
             attrs=' frequency="3" timeframe="120"',
         ),
         _rule(
@@ -114,7 +114,7 @@ def session_rules() -> list[str]:
                 "<same_field>src_ip</same_field>",
             ),
             technique="T1110.001",
-            groups="cowrie,honeypot,authentication_failures,",
+            groups="authentication_failures,",
             attrs=' frequency="10" timeframe="300"',
         ),
         _rule(
@@ -123,7 +123,7 @@ def session_rules() -> list[str]:
             "Cowrie: attacker logged in",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("login.success")),
             technique="T1078",
-            groups="cowrie,honeypot,authentication_success,",
+            groups="authentication_success,",
         ),
         _rule(
             BASE_ID + 14,
@@ -134,14 +134,14 @@ def session_rules() -> list[str]:
                 f'<field name="username" type="pcre2">(?i)^({defaults})$</field>',
             ),
             technique="T1078.001",
-            groups="cowrie,honeypot,authentication_success,",
+            groups="authentication_success,",
         ),
         _rule(
             COMMAND_BASE,
             3,
             "Cowrie: attacker ran a command",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("command.input")),
-            groups="cowrie,honeypot,",
+            groups="",
         ),
         _rule(
             BASE_ID + 30,
@@ -149,7 +149,7 @@ def session_rules() -> list[str]:
             "Cowrie: file downloaded into the honeypot",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("session.file_download")),
             technique="T1105",
-            groups="cowrie,honeypot,malware,",
+            groups="malware,",
         ),
         _rule(
             BASE_ID + 31,
@@ -157,7 +157,7 @@ def session_rules() -> list[str]:
             "Cowrie: file uploaded into the honeypot",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("session.file_upload")),
             technique="T1105",
-            groups="cowrie,honeypot,malware,",
+            groups="malware,",
         ),
         _rule(
             BASE_ID + 40,
@@ -165,7 +165,7 @@ def session_rules() -> list[str]:
             "Cowrie: port-forwarding request (the attacker wants to use the host as a relay)",
             conditions=(f"<if_sid>{BASE_ID}</if_sid>", _event("direct-tcpip.request")),
             technique="T1090",
-            groups="cowrie,honeypot,tunnel,",
+            groups="tunnel,",
         ),
     ]
 
@@ -199,7 +199,7 @@ def command_rules() -> list[str]:
                 _command_field(rule.pattern.pattern, rule.scope),
             ),
             technique=rule.technique,
-            groups="cowrie,honeypot,command,",
+            groups="command,",
         )
         for rule_id, rule in numbered
     ]
