@@ -40,3 +40,5 @@ The unit tests check the rules offline. `logtest.sh` is the real check; it was v
 5. Alerts appear in `docker exec surya-wazuh-manager tail -f /var/ossec/logs/alerts/alerts.json`.
 
 The agent must not be newer than the manager (both 4.14.7 here).
+
+After changing the rules file, recreate the container: `docker compose up -d --force-recreate`. A plain `docker compose restart` can keep serving the old file, because git replaces the file and Docker's single-file mount still points at the previous copy. Check with `docker exec surya-wazuh-manager grep -c 100550 /var/ossec/etc/rules/surya_kundal_cowrie_rules.xml` (should print 1) and `./logtest.sh`.
