@@ -4,7 +4,7 @@ An SSH honeypot platform built on [Cowrie](https://github.com/cowrie/cowrie). At
 
 The name comes from Karna's *kavach and kundal* in the Mahabharata: armour that looks like protection but is the thing the gods schemed to take. A honeypot is the same idea turned around, a system that looks like a real target and exists only to be studied.
 
-> **Status:** early development. Phase 1 (Cowrie + log parser) is in progress. Nothing below the "Built" line is implemented yet.
+> **Status:** early development. Cowrie capture, log parsing, and database storage work. Enrichment, ATT&CK mapping, Wazuh integration, and the dashboard are not built yet.
 
 ## Architecture
 
@@ -30,9 +30,9 @@ Internet / attacker
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | Repo skeleton, tests, CI | in progress |
-| 1 | Cowrie running, log parser | in progress |
-| 2 | Database layer and live log watcher | planned |
+| 0 | Repo skeleton, tests, CI | done |
+| 1 | Cowrie running, log parser | done |
+| 2 | Database layer and live log watcher | database + batch import done; live watcher next |
 | 3 | Threat-intel enrichment with caching and rate limits | planned |
 | 4 | MITRE ATT&CK mapping engine | planned |
 | 5 | Wazuh custom rules | planned |
@@ -41,12 +41,14 @@ Internet / attacker
 | 8 | Deploy to a cloud VM and collect real attacker data | planned |
 | 9 | Write-up, demo, documentation | planned |
 
-All enrichment sources use free tiers. No paid services are required.
+Only free tiers and free offline datasets are used. No paid services are required. Free-tier limits are checked against each provider's own documentation before a provider is adopted.
 
 ## Built so far
 
 - Cowrie 3.x running locally in a Kali VM, logging JSON events
 - Log parser in `src/surya_kundal/parser/`
+- SQLite storage (SQLAlchemy 2.0): sessions, logins, commands, downloads. Timestamps are stored as timezone-aware UTC, foreign keys are enforced, WAL mode is on, and re-importing a log never creates duplicates
+- `surya-kundal ingest` and `surya-kundal list` commands
 - Test suite in `tests/`, with sample events taken from a real captured session
 - CI running ruff (lint + format check) and pytest on Python 3.11 and 3.13
 - Project skeleton for the later phases (empty packages, config template)
@@ -79,11 +81,14 @@ ruff check . && ruff format --check .
 pytest -v
 ```
 
-Run the parser against a local Cowrie log:
+Import a Cowrie log into the database and look at it:
 
 ```bash
-python -m surya_kundal.parser.log_parser
+surya-kundal ingest --log ~/cowrie/var/log/cowrie/cowrie.json
+surya-kundal list
 ```
+
+The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_kundal.db`). Importing the same log again is safe.
 
 ## Security notes
 

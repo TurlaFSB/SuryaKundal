@@ -19,50 +19,23 @@ Contract that summarize() must satisfy:
 
 import json
 
+from sample_events import (
+    CLIENT_VERSION,
+    HASSH,
+    SESSION_A,
+    SESSION_A_EVENTS,
+    SESSION_B,
+    SHA,
+    T0,
+    T_CMD1,
+    T_CMD2,
+    T_DL,
+    T_END,
+    T_FAIL,
+    T_OK,
+    make_event,
+)
 from surya_kundal.parser.log_parser import group_by_session, read_events, summarize
-
-SESSION_A = "051b29d11c6c"
-SESSION_B = "aaaaaaaaaaaa"
-
-T0 = "2026-10-05T07:11:23.959011Z"
-T_FAIL = "2026-10-05T07:11:37.065293Z"
-T_OK = "2026-10-05T07:11:53.466838Z"
-T_CMD1 = "2026-10-05T07:12:02.484294Z"
-T_CMD2 = "2026-10-05T07:12:13.200027Z"
-T_DL = "2026-10-05T07:12:30.667343Z"
-T_END = "2026-10-05T07:12:36.563805Z"
-
-SHA = "25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484"
-
-
-def _event(session, eventid, timestamp, **fields):
-    return {
-        "session": session,
-        "src_ip": "203.0.113.7",
-        "eventid": eventid,
-        "timestamp": timestamp,
-        **fields,
-    }
-
-
-SESSION_A_EVENTS = [
-    _event(SESSION_A, "cowrie.session.connect", T0),
-    _event(SESSION_A, "cowrie.client.version", T0, version="SSH-2.0-OpenSSH_10.4p1"),
-    _event(SESSION_A, "cowrie.client.kex", T0, hassh="eeca2460550b9ded084ecf2f70a75356"),
-    _event(SESSION_A, "cowrie.login.failed", T_FAIL, username="root", password="123456"),
-    _event(SESSION_A, "cowrie.login.success", T_OK, username="root", password="apple"),
-    _event(SESSION_A, "cowrie.command.input", T_CMD1, input="whoami"),
-    _event(SESSION_A, "cowrie.command.input", T_CMD2, input="cat /etc/passwd"),
-    _event(
-        SESSION_A,
-        "cowrie.session.file_download",
-        T_DL,
-        url="http://example.com/test/sh",
-        shasum=SHA,
-    ),
-    _event(SESSION_A, "cowrie.session.closed", T_END, duration_ms=72599),
-]
-
 
 # --- read_events -----------------------------------------------------------
 
@@ -91,7 +64,7 @@ def test_read_events_skips_malformed_lines(tmp_path):
 
 
 def test_group_by_session_groups_events_by_session_id():
-    events = SESSION_A_EVENTS + [_event(SESSION_B, "cowrie.session.connect", T0)]
+    events = SESSION_A_EVENTS + [make_event(SESSION_B, "cowrie.session.connect", T0)]
 
     grouped = group_by_session(events)
 
@@ -158,8 +131,8 @@ def test_summarize_extracts_session_timing():
 def test_summarize_extracts_client_fingerprints():
     summary = summarize(SESSION_A_EVENTS)
 
-    assert summary["client_version"] == "SSH-2.0-OpenSSH_10.4p1"
-    assert summary["hassh"] == "eeca2460550b9ded084ecf2f70a75356"
+    assert summary["client_version"] == CLIENT_VERSION
+    assert summary["hassh"] == HASSH
 
 
 def test_summarize_unfinished_session_has_no_end_time():
