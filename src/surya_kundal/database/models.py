@@ -331,20 +331,3 @@ class IngestOffset(Base):
     inode: Mapped[int] = mapped_column(BigInteger)
     offset: Mapped[int] = mapped_column(BigInteger)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
-
-
-class SessionAnalysis(Base):
-    """A machine-written description of a session. Never evidence: always shown as unverified."""
-
-    __tablename__ = "session_analyses"
-
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
-    )
-    summary: Mapped[str] = mapped_column(Text)
-    intent: Mapped[str] = mapped_column(String(32))
-    sophistication: Mapped[str] = mapped_column(String(24))
-    confidence: Mapped[str] = mapped_column(String(8))
-    model: Mapped[str] = mapped_column(String(64))
-    prompt_version: Mapped[str] = mapped_column(String(8))
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime)

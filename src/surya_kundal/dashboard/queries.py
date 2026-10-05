@@ -25,7 +25,6 @@ from surya_kundal.database.models import (
     IpGeo,
     IpIntel,
     Login,
-    SessionAnalysis,
     TechniqueMatch,
     TunnelRequest,
     Upload,
@@ -169,7 +168,6 @@ class SessionDetail:
     session_matches: list[TechniqueMatch]
     files: list[FileView]
     tunnels: list[TunnelRequest]
-    analysis: SessionAnalysis | None = None
     techniques: list[TechniqueCount] = field(default_factory=list)
 
 
@@ -517,5 +515,4 @@ def session_detail(db: Session, prefix: str) -> SessionDetail | None:
         session_matches=by_command.get(None, []),
         files=files,
         tunnels=list(session.tunnels),
-        analysis=db.get(SessionAnalysis, session.id),
     )

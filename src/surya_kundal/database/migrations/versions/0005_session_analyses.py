@@ -38,4 +38,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("session_analyses")
+    if "session_analyses" in sa.inspect(op.get_bind()).get_table_names():
+        op.drop_table("session_analyses")

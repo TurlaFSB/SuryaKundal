@@ -48,7 +48,6 @@ def _count(db, model):
 def test_init_db_creates_expected_tables(engine):
     assert set(inspect(engine).get_table_names()) == {
         "ingest_offsets",
-        "session_analyses",
         "sessions",
         "logins",
         "commands",

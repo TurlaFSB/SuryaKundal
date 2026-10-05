@@ -24,14 +24,11 @@ from surya_kundal.database.models import (
     Login,
     TechniqueMatch,
 )
-from surya_kundal.database.repository import save_analysis, sessions_needing_analysis
 from surya_kundal.enrichment.enrich import DEFAULT_ABUSE_BUDGET, DEFAULT_VT_BUDGET
 from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
 from surya_kundal.enrichment.http import ProviderError
 from surya_kundal.ingest import ingest_log
-from surya_kundal.llm.analyst import PROMPT_VERSION, Analysis, analyze_session
-from surya_kundal.llm.ollama import DEFAULT_MODEL, LLMError, OllamaClient, check_model
 from surya_kundal.mapping.attack import load_catalog
 from surya_kundal.mapping.store import map_pending
 from surya_kundal.pipeline import build_providers, run_enrichment
@@ -114,28 +111,6 @@ def _build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--port", type=int, default=8080)
     dash.add_argument("--alerts", type=Path, default=None, help="Wazuh alert export (JSON lines)")
     _add_db_option(dash)
-
-    analyze = sub.add_parser("analyze", help="have a local model describe one session (optional)")
-    analyze.add_argument(
-        "session_id", nargs="?", help="session ID, or a unique prefix (omit with --pending)"
-    )
-    analyze.add_argument("--save", action="store_true", help="store the result in the database")
-    analyze.add_argument(
-        "--pending",
-        type=int,
-        metavar="N",
-        default=None,
-        help="analyse and store up to N newest sessions that ran commands and have no analysis",
-    )
-    analyze.add_argument("--url", default=None, help="Ollama URL (default: $OLLAMA_URL)")
-    analyze.add_argument("--model", default=None, help="model (default: $OLLAMA_MODEL)")
-    _add_db_option(analyze)
-
-    llm = sub.add_parser("llm", help="check the local Ollama models (optional)")
-    llm_sub = llm.add_subparsers(dest="llm_action", required=True)
-    check = llm_sub.add_parser("check", help="test the connection and time each model")
-    check.add_argument("--url", default=None, help="Ollama URL (default: $OLLAMA_URL)")
-    check.add_argument("--model", action="append", default=None, help="model to test (repeatable)")
 
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
@@ -242,107 +217,6 @@ def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
     )
     serve(app, host=args.host, port=args.port, threads=4)
     return 0
-
-
-def _run_llm(args: argparse.Namespace, settings: Settings) -> int:
-    client = OllamaClient(args.url or settings.ollama_url)
-    print(f"Connecting to {client.base_url} ...", file=sys.stderr)
-    try:
-        installed = client.models()
-        print(f"Connected to {client.base_url}. Installed: {', '.join(installed) or 'none'}")
-        wanted = args.model or ([settings.ollama_model] if settings.ollama_model else installed)
-        failed = False
-        for name in wanted:
-            if name not in installed:
-                print(f"  {printable(name)}: not installed (ollama pull {printable(name)})")
-                failed = True
-                continue
-            print(f"  {printable(name)}: loading and generating (first run can take a minute) ...")
-            result, valid = check_model(client, name)
-            speed = f"{result.tokens_per_second:.1f} tok/s" if result.tokens_per_second else "?"
-            print(
-                f"    {result.seconds:.1f}s total, {speed}, JSON {'valid' if valid else 'INVALID'}"
-            )
-            failed |= not valid
-        return 1 if failed else 0
-    except LLMError as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-    finally:
-        client.close()
-
-
-def _print_analysis(session_id: str, result: Analysis) -> None:
-    print(f"Session {printable(session_id)} (machine-generated analysis, unverified)")
-    print(f"  {result.summary}")
-    print(
-        f"  intent: {result.intent}   sophistication: {result.sophistication}   "
-        f"confidence: {result.confidence}"
-    )
-    print(f"  model: {printable(result.model)}, {result.seconds:.1f}s")
-
-
-def _run_analyze(args: argparse.Namespace, settings: Settings) -> int:
-    model = args.model or settings.ollama_model or DEFAULT_MODEL
-    if args.pending is None and not args.session_id:
-        print("error: give a session ID, or use --pending N", file=sys.stderr)
-        return 2
-    with _open_database(args, settings)() as db:
-        if args.pending is not None:
-            targets = sessions_needing_analysis(db, max(1, args.pending))
-            save = True
-        else:
-            found = db.scalars(
-                select(HoneypotSession).where(
-                    HoneypotSession.id.startswith(args.session_id, autoescape=True)
-                )
-            ).all()
-            if len(found) != 1:
-                reason = "no session" if not found else "more than one session"
-                print(f"error: {reason} matches {printable(args.session_id)!r}", file=sys.stderr)
-                return 2
-            targets, save = [found[0]], args.save
-        if not targets:
-            print("Nothing to analyse.")
-            return 0
-        client = OllamaClient(args.url or settings.ollama_url)
-        print(
-            f"Asking {printable(model)} about {len(targets)} session(s) (the first call loads "
-            "the model; allow up to a few minutes) ...",
-            file=sys.stderr,
-        )
-        failures = 0
-        try:
-            for session in targets:
-                matches = list(
-                    db.scalars(
-                        select(TechniqueMatch).where(TechniqueMatch.session_id == session.id)
-                    )
-                )
-                try:
-                    result = analyze_session(client, model, session, matches)
-                except LLMError as error:
-                    print(f"error: {printable(session.id)}: {error}", file=sys.stderr)
-                    failures += 1
-                    if failures >= 3 or len(targets) == 1:
-                        return 2
-                    continue
-                _print_analysis(session.id, result)
-                if save:
-                    save_analysis(
-                        db,
-                        session.id,
-                        summary=result.summary,
-                        intent=result.intent,
-                        sophistication=result.sophistication,
-                        confidence=result.confidence,
-                        model=result.model,
-                        prompt_version=PROMPT_VERSION,
-                    )
-                    db.commit()
-        finally:
-            client.close()
-    return 2 if failures else 0
 
 
 def _log_path(args: argparse.Namespace, settings: Settings) -> Path:
@@ -585,8 +459,6 @@ def main(argv: list[str] | None = None) -> int:
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
         "dashboard": _run_dashboard,
-        "llm": _run_llm,
-        "analyze": _run_analyze,
     }
     try:
         return handlers[args.action](args, settings)
