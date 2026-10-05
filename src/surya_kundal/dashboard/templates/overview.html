@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block count %}{{ totals.sessions }}{% endblock %}
+{% block body %}
+<section class="stats" aria-label="Totals">
+  <div><b>{{ totals.sessions }}</b><span>sessions</span></div>
+  <div><b>{{ totals.sources }}</b><span>source IPs</span></div>
+  <div><b>{{ totals.accepted_logins }}</b><span>accepted logins</span></div>
+  <div><b>{{ totals.commands }}</b><span>commands</span></div>
+  <div><b>{{ totals.files }}</b><span>files moved</span></div>
+  <div><b>{{ totals.last_event | ago }}</b><span>last visitor</span></div>
+</section>
+
+<div class="grid">
+<section class="panel wide">
+  <h2>Where visitors come from</h2>
+  <svg class="map" viewBox="0 0 960 480" role="img" aria-label="World map of attacker locations">
+    <image href="{{ url_for('static', filename='world.svg') }}" width="960" height="480"/>
+    {% for pt in points %}
+    {% set xy = project(pt.longitude, pt.latitude) %}
+    <circle class="dot" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ [3 + pt.sessions ** 0.5, 12] | min | round(1) }}"><title>{{ pt.ip | p }}{% if pt.city %}, {{ pt.city | p }}{% endif %}{% if pt.country %} ({{ pt.country | p }}){% endif %}: {{ pt.sessions }} sessions</title></circle>
+    {% endfor %}
+  </svg>
+  {% if not points %}<p class="muted">No located visitors yet. Run <code>surya-kundal enrich</code>; private and local addresses have no location.</p>{% endif %}
+</section>
+
+<section class="panel">
+  <h2>How far they got</h2>
+  {% set top = [depth.contact, 1] | max %}
+  <svg class="steps" viewBox="0 0 300 168" role="img" aria-label="Funnel of sessions by depth">
+    {% for label, value in [('Connected', depth.contact), ('Logged in', depth.access), ('Ran commands', depth.hands_on), ('Took action', depth.action)] %}
+    <rect class="step s{{ loop.index }}" x="0" y="{{ (loop.index0 * 42) }}" width="{{ (value / top * 300) | round(1) }}" height="36" rx="3"/>
+    <text x="8" y="{{ loop.index0 * 42 + 23 }}">{{ label }}: {{ value }}</text>
+    {% endfor %}
+  </svg>
+  <p class="muted">Each step is a smaller pool: most visitors never get past the first.</p>
+</section>
+
+<section class="panel">
+  <h2>Last 24 hours</h2>
+  {% set peak = [hourly | max, 1] | max %}
+  <svg class="bars" viewBox="0 0 240 80" role="img" aria-label="Sessions per hour">
+    {% for n in hourly %}
+    <rect class="bar" x="{{ loop.index0 * 10 }}" y="{{ 80 - (n / peak * 78) | round(1) }}" width="8" height="{{ (n / peak * 78) | round(1) }}"><title>{{ n }} sessions</title></rect>
+    {% endfor %}
+  </svg>
+  <p class="muted">Peak: {{ peak if hourly | max else 0 }} per hour.</p>
+</section>
+
+<section class="panel">
+  <h2>Top countries</h2>
+  <ul class="plain">
+    {% for code, n in countries %}<li><a href="{{ url_for('sessions', country=code) }}">{{ code | p }}</a> <span class="num">{{ n }}</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Common techniques</h2>
+  {% set tmax = [techniques | map(attribute='sessions') | max, 1] | max if techniques else 1 %}
+  <ul class="plain">
+    {% for t in techniques %}
+    <li><a href="{{ url_for('sessions', technique=t.technique_id) }}">{{ t.technique_id | p }}</a> {{ t.name | p }} <span class="num">{{ t.sessions }}</span>
+      <svg class="meter" viewBox="0 0 100 4" aria-hidden="true"><rect width="{{ (t.sessions / tmax * 100) | round(1) }}" height="4"/></svg></li>
+    {% else %}<li class="muted">None yet. Run <code>surya-kundal map</code>.</li>{% endfor %}
+  </ul>
+</section>
+
+<section class="panel wide">
+  <h2>Honeypot checks <span class="pill">{{ probing }} session{{ '' if probing == 1 else 's' }}</span></h2>
+  <p class="muted">Visitors checking whether this is a honeypot or a sandbox. These are the ones worth reading.</p>
+  <table>
+    <thead><tr><th>When</th><th>From</th><th>Check</th><th>What they ran</th></tr></thead>
+    <tbody>
+    {% for pr in probes %}
+    <tr><td>{{ pr.when | ago }}</td><td>{{ (pr.ip or '-') | p }}</td><td><a href="{{ url_for('session_view', session_id=pr.session_id) }}">{{ pr.rule_id | p }}</a></td><td><code>{{ pr.evidence | p(limit=80) }}</code></td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No one has probed it yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if alerts_enabled %}
+<section class="panel wide">
+  <h2>Wazuh alerts</h2>
+  <table>
+    <thead><tr><th>Level</th><th>Rule</th><th>Technique</th><th>From</th><th>Command</th></tr></thead>
+    <tbody>
+    {% for a in alerts %}
+    <tr><td><span class="lvl l{{ [a.level // 4, 3] | min }}">{{ a.level }}</span></td><td>{{ a.description | p(limit=70) }}</td><td>{{ a.techniques | join(', ') | p }}</td><td>{{ a.src_ip | p }}</td><td><code>{{ a.command | p(limit=60) }}</code></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">No alerts in the export yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+</div>
+{% endblock %}

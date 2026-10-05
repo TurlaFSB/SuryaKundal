@@ -2,9 +2,9 @@
 
 **An SSH honeypot platform that turns raw attacker activity into structured, enriched, ATT&CK-mapped intelligence.**
 
-Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, enriches each source IP and captured file with threat intelligence, maps what the attacker did to MITRE ATT&CK techniques, and stores it all in a queryable database. Wazuh alert rules are included; a live dashboard is the next phase.
+Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, enriches each source IP and captured file with threat intelligence, maps what the attacker did to MITRE ATT&CK techniques, and stores it all in a queryable database. Wazuh alert rules and a read-only web dashboard are included.
 
-> **Status:** active development. Capture, storage, enrichment, ATT&CK mapping, and the command-line tools work today and are covered by an automated test suite. The Wazuh rules are unit-tested and verified against a real Wazuh 4.14.7 manager; the dashboard, containerised deployment, and public deployment are not built yet; the table below is explicit about which is which.
+> **Status:** active development. Capture, storage, enrichment, ATT&CK mapping, and the command-line tools work today and are covered by an automated test suite. The Wazuh rules are unit-tested and verified against a real Wazuh 4.14.7 manager; the dashboard is tested and runs locally; containerised deployment and public deployment are not built yet; the table below is explicit about which is which.
 
 ## Why this exists
 
@@ -38,7 +38,7 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 | One-process service (`surya-kundal run`): capture, ATT&CK mapping, background enrichment | Working |
 | Wazuh rules for Cowrie events, generated from the ATT&CK rules, including honeypot-fingerprinting and rapid-recon alerts (see `wazuh/`) | Done, verified on Wazuh 4.14.7 |
 | Deception kit: hardened Cowrie config, believable fake filesystem and login policy, with an honest threat model of what still gives a honeypot away (see `cowrie/`) | Working |
-| Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
+| Read-only web dashboard (`surya-kundal dashboard`): attack map, depth funnel, honeypot-fingerprinting panel, ATT&CK matrix, session drill-down, optional Wazuh alerts. Strict CSP, escaped attacker text, optional password | Done, tested; not yet run against real attackers |
 | One-command deployment with Docker Compose | Planned |
 | Public deployment and real-world data collection | Planned |
 
@@ -63,7 +63,7 @@ Internet / attacker
    +----------+-----------+
    |                      |
 [Wazuh rules]      [Flask dashboard]
-   (done)              (planned)
+   (done)              (done)
 ```
 
 Everything from the log parser onward is code in this repository. Cowrie itself is used unmodified as the capture engine.
@@ -139,6 +139,14 @@ surya-kundal techniques            # ATT&CK techniques seen, most common first
 surya-kundal show <session-id>     # one session: commands with their techniques
 ```
 
+The dashboard needs the `dashboard` extra and listens on localhost only unless you set `DASHBOARD_TOKEN`:
+
+```bash
+pip install -e ".[dashboard]"
+surya-kundal dashboard             # http://127.0.0.1:8080
+wazuh/export-alerts.sh             # optional: show Wazuh alerts on the overview
+```
+
 ## Roadmap
 
 | Phase | Scope | State |
@@ -149,7 +157,7 @@ surya-kundal show <session-id>     # one session: commands with their techniques
 | 3 | Threat-intel enrichment with caching and rate limits | Done |
 | 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh custom rules | Done (verified on Wazuh 4.14.7) |
-| 6 | Flask dashboard | Planned |
+| 6 | Flask dashboard | Done |
 | 7 | Docker Compose for the whole stack | Planned |
 | 8 | Deploy to a cloud VM and collect real attacker data | Planned |
 | 9 | Write-up, demo, documentation | Planned |
@@ -164,7 +172,7 @@ src/surya_kundal/
     database/      SQLAlchemy models, engine, storage, Alembic migrations
     enrichment/    GeoIP, AbuseIPDB, VirusTotal, Tor list, enrichment pass
     mapping/       ATT&CK catalog, rules.toml, mapping engine
-    dashboard/     Flask web UI (Phase 6)
+    dashboard/     read-only Flask web UI
     watcher.py     Live log following
     service.py     The one-process pipeline behind `surya-kundal run`
     config.py      Settings (environment and .env)

@@ -106,6 +106,12 @@ def _build_parser() -> argparse.ArgumentParser:
     wazuh = sub.add_parser("wazuh-rules", help="generate the Wazuh rules for Cowrie's log")
     wazuh.add_argument("--output", type=Path, default=None, help="write here instead of stdout")
 
+    dash = sub.add_parser("dashboard", help="serve the read-only web dashboard")
+    dash.add_argument("--host", default="127.0.0.1", help="address to listen on (default: local)")
+    dash.add_argument("--port", type=int, default=8080)
+    dash.add_argument("--alerts", type=Path, default=None, help="Wazuh alert export (JSON lines)")
+    _add_db_option(dash)
+
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
     update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
@@ -181,6 +187,36 @@ def _run_geoip(args: argparse.Namespace, settings: Settings) -> int:
 
 
 # --- capture ---------------------------------------------------------------
+
+
+def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
+    try:
+        from waitress import serve
+
+        from surya_kundal.dashboard.app import create_app
+    except ImportError:
+        print('error: the dashboard needs: pip install -e ".[dashboard]"', file=sys.stderr)
+        return 2
+    local = args.host in ("127.0.0.1", "localhost", "::1")
+    if not local and not settings.dashboard_token:
+        print(
+            "error: listening beyond localhost needs a password; set DASHBOARD_TOKEN in .env",
+            file=sys.stderr,
+        )
+        return 2
+    # No migrations here: the dashboard only reads what the pipeline already wrote.
+    engine = create_db_engine(args.db or settings.database_url)
+    alerts = args.alerts or settings.wazuh_alerts_path
+    app = create_app(
+        make_session_factory(engine), alerts_path=alerts, token=settings.dashboard_token
+    )
+    where = f"http://{args.host}:{args.port}"
+    print(
+        f"Dashboard on {where}"
+        + (" (password = DASHBOARD_TOKEN)" if settings.dashboard_token else "")
+    )
+    serve(app, host=args.host, port=args.port, threads=4)
+    return 0
 
 
 def _log_path(args: argparse.Namespace, settings: Settings) -> Path:
@@ -422,6 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         "techniques": _run_techniques,
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
+        "dashboard": _run_dashboard,
     }
     try:
         return handlers[args.action](args, settings)

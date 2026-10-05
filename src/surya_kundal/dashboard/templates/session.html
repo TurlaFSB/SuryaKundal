@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set s = d.session %}
+{% block title %}Session {{ s.id | p(limit=13) }} - Surya Kundal{% endblock %}
+{% block body %}
+<section class="panel">
+  <h1>Session <code>{{ s.id | p }}</code></h1>
+  <dl class="facts">
+    <dt>From</dt><dd>{{ (s.src_ip or '-') | p }}{% if d.geo %} ({{ (d.geo.city or '') | p }} {{ (d.geo.country_code or '') | p }}){% endif %}{% if d.tor %} <span class="pill">Tor exit</span>{% endif %}</dd>
+    <dt>Started</dt><dd>{{ s.start_time | stamp }} UTC{% if s.duration_ms is not none %}, lasted {{ (s.duration_ms / 1000) | round(1) }}s{% endif %}</dd>
+    <dt>Client</dt><dd>{{ (s.client_version or '-') | p }}</dd>
+    <dt>HASSH</dt><dd><code>{{ (s.hassh or '-') | p }}</code></dd>
+    <dt>Abuse score</dt><dd>{{ '-' if d.abuse is none else d.abuse }}</dd>
+  </dl>
+</section>
+
+{% if d.session_matches %}
+<section class="panel">
+  <h2>Session-level techniques</h2>
+  <p>{% for m in d.session_matches %}<span class="tag" title="{{ m.evidence | p }}">{{ m.technique_id | p }}</span> {% endfor %}</p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Logins <span class="pill">{{ d.login_total }}</span></h2>
+  <table><thead><tr><th>Result</th><th>User</th><th>Password</th></tr></thead><tbody>
+  {% for l in d.logins %}<tr><td>{{ 'accepted' if l.success else 'refused' }}</td><td>{{ l.username | p }}</td><td>{{ l.password | p }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
+  </tbody></table>
+  {% if d.login_total > d.logins | length %}<p class="muted">Showing the first {{ d.logins | length }}.</p>{% endif %}
+</section>
+
+<section class="panel">
+  <h2>Commands <span class="pill">{{ d.commands | length }}</span></h2>
+  <ol class="cmds">
+  {% for c in d.commands %}
+    <li><code>{{ c.text | p }}</code>
+      {% for m in c.matches %}<a class="tag" href="{{ url_for('sessions', technique=m.technique_id) }}" title="{{ m.rule_id | p }}">{{ m.technique_id | p }}</a> {% endfor %}</li>
+  {% else %}<li class="muted">None.</li>{% endfor %}
+  </ol>
+</section>
+
+{% if d.files %}
+<section class="panel">
+  <h2>Files</h2>
+  <table><thead><tr><th>Kind</th><th>Name</th><th>SHA-256</th><th>VirusTotal</th></tr></thead><tbody>
+  {% for f in d.files %}<tr><td>{{ f.kind }}</td><td>{{ f.name | p(limit=80) }}</td><td><code>{{ (f.sha256 or '-') | p }}</code></td>
+  <td>{% if f.known is none %}not looked up{% elif not f.known %}unknown to VirusTotal{% else %}{{ f.malicious }}/{{ f.engines }} flagged {{ (f.label or '') | p }}{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+
+{% if d.tunnels %}
+<section class="panel">
+  <h2>Port-forward requests</h2>
+  <ul class="plain">{% for t in d.tunnels %}<li><code>{{ t.dst_ip | p }}:{{ t.dst_port }}</code></li>{% endfor %}</ul>
+</section>
+{% endif %}
+<p><a href="{{ url_for('sessions') }}">Back to sessions</a></p>
+{% endblock %}

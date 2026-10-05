@@ -21,6 +21,7 @@ DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
 DEFAULT_DATABASE_URL = "sqlite:///data/surya_kundal.db"
 DEFAULT_GEOIP_DIR = "data/geoip"
 DEFAULT_TOR_CACHE = "data/tor_exit_nodes.txt"
+DEFAULT_WAZUH_ALERTS = "data/wazuh_alerts.jsonl"
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,8 @@ class Settings:
     maxmind_license_key: str
     abuseipdb_api_key: str
     virustotal_api_key: str
+    wazuh_alerts_path: Path
+    dashboard_token: str
     log_level: str
 
     @classmethod
@@ -51,6 +54,8 @@ class Settings:
             maxmind_license_key=get("MAXMIND_LICENSE_KEY"),
             abuseipdb_api_key=get("ABUSEIPDB_API_KEY"),
             virustotal_api_key=get("VIRUSTOTAL_API_KEY"),
+            wazuh_alerts_path=Path(get("WAZUH_ALERTS_PATH", DEFAULT_WAZUH_ALERTS)).expanduser(),
+            dashboard_token=get("DASHBOARD_TOKEN"),
             log_level=get("LOG_LEVEL", "INFO").upper(),
         )
 

@@ -189,13 +189,13 @@ def _enrich_files(
         .union_all(select(Upload.sha256, Upload.timestamp).where(Upload.sha256.is_not(None)))
         .subquery()
     )
-    hashes = [
-        sha
-        for sha in db.scalars(
+    candidates: list[str | None] = list(
+        db.scalars(
             select(seen.c.sha256).group_by(seen.c.sha256).order_by(func.max(seen.c.at).desc())
         )
-        if sha and _SHA256.fullmatch(sha)  # a malformed hash must not use up a budget slot
-    ]
+    )
+    # a malformed hash must not use up a budget slot
+    hashes = [sha for sha in candidates if sha and _SHA256.fullmatch(sha)]
     rows = {
         r.sha256: r for r in db.scalars(select(FileIntel).where(FileIntel.provider == "virustotal"))
     }

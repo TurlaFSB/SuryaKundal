@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}Surya Kundal{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="{{ url_for('overview') }}">Surya Kundal</a>
+  <nav aria-label="Main">
+    <a href="{{ url_for('overview') }}"{% if request.endpoint == 'overview' %} aria-current="page"{% endif %}>Overview</a>
+    <a href="{{ url_for('sessions') }}"{% if request.endpoint in ('sessions', 'session_view') %} aria-current="page"{% endif %}>Sessions</a>
+    <a href="{{ url_for('attack') }}"{% if request.endpoint == 'attack' %} aria-current="page"{% endif %}>ATT&amp;CK</a>
+  </nav>
+</header>
+<div id="fresh" class="fresh" hidden>New activity. <a href="">Reload</a></div>
+<main>{% block body %}{% endblock %}</main>
+<footer>Everything shown on this page was sent by attackers. It is escaped, but do not paste it into a shell.</footer>
+<script src="{{ url_for('static', filename='app.js') }}" defer data-count="{% block count %}{% endblock %}"></script>
+</body>
+</html>

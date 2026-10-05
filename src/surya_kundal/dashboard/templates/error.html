@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} - Surya Kundal{% endblock %}
+{% block body %}
+<section class="panel narrow">
+  <h1>{{ code }}</h1>
+  <p>{{ message }}</p>
+  <p><a href="{{ url_for('overview') }}">Back to the overview</a></p>
+</section>
+{% endblock %}

@@ -34,6 +34,10 @@ Issues = "https://github.com/TurlaFSB/SuryaKundal/issues"
 surya-kundal = "surya_kundal.cli:main"
 
 [project.optional-dependencies]
+dashboard = [
+    "flask>=3.0",
+    "waitress>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
@@ -43,6 +47,8 @@ dev = [
     "pytest-cov>=5.0",
     "hypothesis>=6.100",
     "pip-audit>=2.7",
+    "flask>=3.0",
+    "waitress>=3.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -51,6 +57,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "surya_kundal" = ["py.typed"]
 "surya_kundal.mapping" = ["rules.toml", "data/*.json"]
+"surya_kundal.dashboard" = ["templates/*.html", "static/*"]
 "surya_kundal.database" = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
 
 [tool.pytest.ini_options]
@@ -74,6 +81,10 @@ warn_unused_ignores = true
 warn_return_any = true
 warn_redundant_casts = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["waitress", "waitress.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100

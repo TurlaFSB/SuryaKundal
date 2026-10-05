@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sessions - Surya Kundal{% endblock %}
+{% block count %}{{ result.total }}{% endblock %}
+{% block body %}
+<section class="panel">
+  <h1>Sessions</h1>
+  <form class="filters" method="get" action="{{ url_for('sessions') }}">
+    <label>IP or session ID <input name="q" value="{{ args.get('q', '') | p }}" maxlength="64"></label>
+    <label>Technique <input name="technique" value="{{ args.get('technique', '') | p }}" maxlength="16" placeholder="T1082"></label>
+    <label>Country <input name="country" value="{{ args.get('country', '') | p }}" maxlength="2" placeholder="US"></label>
+    <button type="submit">Filter</button>
+  </form>
+  <p class="muted">{{ result.total }} session{{ '' if result.total == 1 else 's' }}</p>
+  <table>
+    <thead><tr><th>Session</th><th>Started</th><th>From</th><th>Country</th><th>Abuse</th><th>Logins</th><th>Cmds</th><th>Techniques</th></tr></thead>
+    <tbody>
+    {% for r in result.rows %}
+    <tr>
+      <td><a href="{{ url_for('session_view', session_id=r.id) }}">{{ r.id | p(limit=13) }}</a></td>
+      <td>{{ r.start | stamp }}</td>
+      <td>{{ (r.ip or '-') | p }}{% if r.tor %} <span class="pill">Tor</span>{% endif %}</td>
+      <td>{{ (r.country or '-') | p }}</td>
+      <td>{{ '-' if r.abuse is none else r.abuse }}</td>
+      <td>{{ r.logins }}</td><td>{{ r.commands }}</td>
+      <td>{% for t in r.techniques %}<a class="tag" href="{{ url_for('sessions', technique=t) }}">{{ t | p }}</a> {% endfor %}</td>
+    </tr>
+    {% else %}<tr><td colspan="8" class="muted">No sessions match.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <nav class="pager" aria-label="Pages">
+    {% set base = {'q': args.get('q', ''), 'technique': args.get('technique', ''), 'country': args.get('country', '')} %}
+    {% if result.page > 1 %}<a href="{{ url_for('sessions', page=result.page - 1, **base) }}">Newer</a>{% endif %}
+    <span>Page {{ result.page }} of {{ result.pages }}</span>
+    {% if result.page < result.pages %}<a href="{{ url_for('sessions', page=result.page + 1, **base) }}">Older</a>{% endif %}
+  </nav>
+</section>
+{% endblock %}

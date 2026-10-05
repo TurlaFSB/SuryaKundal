@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}ATT&CK - Surya Kundal{% endblock %}
+{% block body %}
+<section class="panel">
+  <h1>ATT&amp;CK techniques seen</h1>
+  <p class="muted">Columns follow the ATT&amp;CK tactic order. A technique that spans tactics appears under each.</p>
+  {% if matrix %}
+  <div class="matrix">
+  {% for tactic, items in matrix %}
+    <section class="col">
+      <h2>{{ tactic | replace('-', ' ') | p }}</h2>
+      {% for t in items %}
+      <a class="cell" href="{{ url_for('sessions', technique=t.technique_id) }}"><b>{{ t.technique_id | p }}</b> {{ t.name | p }}<span class="num">{{ t.sessions }}</span></a>
+      {% endfor %}
+    </section>
+  {% endfor %}
+  </div>
+  {% else %}<p class="muted">No techniques yet. Run <code>surya-kundal map</code>.</p>{% endif %}
+</section>
+{% endblock %}
