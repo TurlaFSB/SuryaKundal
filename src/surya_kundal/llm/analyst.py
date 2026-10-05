@@ -19,12 +19,14 @@ from dataclasses import dataclass
 
 from surya_kundal.database.models import HoneypotSession, TechniqueMatch
 from surya_kundal.llm.ollama import Generation, LLMError, OllamaClient
+from surya_kundal.mapping.attack import load_catalog
 from surya_kundal.textsafe import printable
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 INTENTS = (
     "credential-guessing",
     "reconnaissance",
+    "credential-theft",
     "malware-deployment",
     "cryptomining",
     "botnet-recruitment",
@@ -50,6 +52,18 @@ Reply with one JSON object and nothing else, with exactly these keys:
   "intent": one of {list(INTENTS)}
   "sophistication": one of {list(SOPHISTICATION)}
   "confidence": one of {list(CONFIDENCE)}
+How to choose:
+- "credential-guessing" only when there were many failed logins (five or more). One or two
+  logins, especially one that was accepted, is not guessing.
+- When login_accepted is above zero the attacker is already inside; do not say they
+  "attempted to gain access".
+- "reconnaissance" for looking around the system (uname, whoami, ps, network info).
+- "credential-theft" when they read password hashes, SSH keys or similar secrets.
+- The attack_techniques_detected_by_rules line comes from trusted analysis rules; use it.
+- confidence "high" only when several independent signals agree; short sessions are
+  "medium" or "low".
+- The summary must name the most sensitive thing the attacker did, such as reading
+  /etc/shadow or downloading a file.
 If the evidence is thin, say so in the summary, choose "unknown" and low confidence."""
 
 
@@ -91,9 +105,14 @@ def build_evidence(session: HoneypotSession, matches: list[TechniqueMatch]) -> s
         lines.append(f"uploaded: {_untrusted(upload.filename)}")
     for tunnel in session.tunnels[:5]:
         lines.append(f"port_forward_to: {_untrusted(tunnel.dst_ip, 45)}:{tunnel.dst_port}")
+    catalog = load_catalog()
     techniques = sorted({m.technique_id for m in matches})
     if techniques:
-        lines.append("attack_techniques_detected_by_rules: " + ", ".join(techniques))
+        named = []
+        for tid in techniques:
+            known = catalog.get(tid)
+            named.append(f"{tid} {known.name}" if known else tid)
+        lines.append("attack_techniques_detected_by_rules: " + "; ".join(named))
     return "<data>\n" + "\n".join(lines) + "\n</data>"
 
 
