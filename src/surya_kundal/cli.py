@@ -24,12 +24,13 @@ from surya_kundal.database.models import (
     Login,
     TechniqueMatch,
 )
+from surya_kundal.database.repository import save_analysis, sessions_needing_analysis
 from surya_kundal.enrichment.enrich import DEFAULT_ABUSE_BUDGET, DEFAULT_VT_BUDGET
 from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
 from surya_kundal.enrichment.http import ProviderError
 from surya_kundal.ingest import ingest_log
-from surya_kundal.llm.analyst import analyze_session
+from surya_kundal.llm.analyst import PROMPT_VERSION, Analysis, analyze_session
 from surya_kundal.llm.ollama import DEFAULT_MODEL, LLMError, OllamaClient, check_model
 from surya_kundal.mapping.attack import load_catalog
 from surya_kundal.mapping.store import map_pending
@@ -115,7 +116,17 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_db_option(dash)
 
     analyze = sub.add_parser("analyze", help="have a local model describe one session (optional)")
-    analyze.add_argument("session_id", help="session ID, or a unique prefix of it")
+    analyze.add_argument(
+        "session_id", nargs="?", help="session ID, or a unique prefix (omit with --pending)"
+    )
+    analyze.add_argument("--save", action="store_true", help="store the result in the database")
+    analyze.add_argument(
+        "--pending",
+        type=int,
+        metavar="N",
+        default=None,
+        help="analyse and store up to N newest sessions that ran commands and have no analysis",
+    )
     analyze.add_argument("--url", default=None, help="Ollama URL (default: $OLLAMA_URL)")
     analyze.add_argument("--model", default=None, help="model (default: $OLLAMA_MODEL)")
     _add_db_option(analyze)
@@ -261,43 +272,77 @@ def _run_llm(args: argparse.Namespace, settings: Settings) -> int:
         client.close()
 
 
+def _print_analysis(session_id: str, result: Analysis) -> None:
+    print(f"Session {printable(session_id)} (machine-generated analysis, unverified)")
+    print(f"  {result.summary}")
+    print(
+        f"  intent: {result.intent}   sophistication: {result.sophistication}   "
+        f"confidence: {result.confidence}"
+    )
+    print(f"  model: {printable(result.model)}, {result.seconds:.1f}s")
+
+
 def _run_analyze(args: argparse.Namespace, settings: Settings) -> int:
     model = args.model or settings.ollama_model or DEFAULT_MODEL
+    if args.pending is None and not args.session_id:
+        print("error: give a session ID, or use --pending N", file=sys.stderr)
+        return 2
     with _open_database(args, settings)() as db:
-        found = db.scalars(
-            select(HoneypotSession).where(
-                HoneypotSession.id.startswith(args.session_id, autoescape=True)
-            )
-        ).all()
-        if len(found) != 1:
-            reason = "no session" if not found else "more than one session"
-            print(f"error: {reason} matches {printable(args.session_id)!r}", file=sys.stderr)
-            return 2
-        session = found[0]
-        matches = list(
-            db.scalars(select(TechniqueMatch).where(TechniqueMatch.session_id == session.id))
-        )
+        if args.pending is not None:
+            targets = sessions_needing_analysis(db, max(1, args.pending))
+            save = True
+        else:
+            found = db.scalars(
+                select(HoneypotSession).where(
+                    HoneypotSession.id.startswith(args.session_id, autoescape=True)
+                )
+            ).all()
+            if len(found) != 1:
+                reason = "no session" if not found else "more than one session"
+                print(f"error: {reason} matches {printable(args.session_id)!r}", file=sys.stderr)
+                return 2
+            targets, save = [found[0]], args.save
+        if not targets:
+            print("Nothing to analyse.")
+            return 0
         client = OllamaClient(args.url or settings.ollama_url)
         print(
-            f"Asking {printable(model)} (the first call loads the model; allow up to a few "
-            "minutes) ...",
+            f"Asking {printable(model)} about {len(targets)} session(s) (the first call loads "
+            "the model; allow up to a few minutes) ...",
             file=sys.stderr,
         )
+        failures = 0
         try:
-            result = analyze_session(client, model, session, matches)
-        except LLMError as error:
-            print(f"error: {error}", file=sys.stderr)
-            return 2
+            for session in targets:
+                matches = list(
+                    db.scalars(
+                        select(TechniqueMatch).where(TechniqueMatch.session_id == session.id)
+                    )
+                )
+                try:
+                    result = analyze_session(client, model, session, matches)
+                except LLMError as error:
+                    print(f"error: {printable(session.id)}: {error}", file=sys.stderr)
+                    failures += 1
+                    if failures >= 3 or len(targets) == 1:
+                        return 2
+                    continue
+                _print_analysis(session.id, result)
+                if save:
+                    save_analysis(
+                        db,
+                        session.id,
+                        summary=result.summary,
+                        intent=result.intent,
+                        sophistication=result.sophistication,
+                        confidence=result.confidence,
+                        model=result.model,
+                        prompt_version=PROMPT_VERSION,
+                    )
+                    db.commit()
         finally:
             client.close()
-        print(f"Session {printable(session.id)} (machine-generated analysis, unverified)")
-        print(f"  {result.summary}")
-        print(
-            f"  intent: {result.intent}   sophistication: {result.sophistication}   "
-            f"confidence: {result.confidence}"
-        )
-        print(f"  model: {printable(result.model)}, {result.seconds:.1f}s")
-    return 0
+    return 2 if failures else 0
 
 
 def _log_path(args: argparse.Namespace, settings: Settings) -> Path:

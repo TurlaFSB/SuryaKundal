@@ -133,3 +133,74 @@ def test_cli_analyze(tmp_path, monkeypatch, capsys):
     assert main(["analyze", "zzz", "--db", url]) == 2
     monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client(["bad", "bad"]))
     assert main(["analyze", SESSION_A[:6], "--db", url]) == 2
+
+
+# --- storing and showing ---------------------------------------------------
+
+
+def _db_with_sessions(tmp_path):
+    url = f"sqlite:///{tmp_path / 'k.db'}"
+    engine = create_db_engine(url)
+    init_db(engine)
+    with make_session_factory(engine)() as db:
+        store_events(db, SESSION_A_EVENTS)
+        db.commit()
+        map_pending(db)
+    return url, make_session_factory(engine)
+
+
+def test_save_and_pending_selection(tmp_path, monkeypatch, capsys):
+    from surya_kundal.database.models import SessionAnalysis
+    from surya_kundal.database.repository import sessions_needing_analysis
+
+    url, factory = _db_with_sessions(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    with factory() as db:
+        assert [s.id for s in sessions_needing_analysis(db, 5)] == [SESSION_A]
+
+    monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client([json.dumps(GOOD)]))
+    assert main(["analyze", "--pending", "5", "--db", url]) == 0
+    with factory() as db:
+        row = db.get(SessionAnalysis, SESSION_A)
+        assert row.intent == "malware-deployment" and row.prompt_version == "v2"
+        assert sessions_needing_analysis(db, 5) == []
+    assert main(["analyze", "--pending", "5", "--db", url]) == 0
+    assert "Nothing to analyse" in capsys.readouterr().out
+
+    # --save on one session replaces the stored analysis
+    other = {**GOOD, "intent": "reconnaissance"}
+    monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client([json.dumps(other)]))
+    assert main(["analyze", SESSION_A[:6], "--save", "--db", url]) == 0
+    with factory() as db:
+        assert db.get(SessionAnalysis, SESSION_A).intent == "reconnaissance"
+
+
+def test_analyze_without_target_and_without_save(tmp_path, monkeypatch, capsys):
+    from surya_kundal.database.models import SessionAnalysis
+
+    url, factory = _db_with_sessions(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["analyze", "--db", url]) == 2
+    monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client([json.dumps(GOOD)]))
+    assert main(["analyze", SESSION_A[:6], "--db", url]) == 0
+    with factory() as db:
+        assert db.get(SessionAnalysis, SESSION_A) is None  # printing alone stores nothing
+
+
+def test_pending_gives_up_after_repeated_failures(tmp_path, monkeypatch):
+    url, _factory = _db_with_sessions(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client(["bad"] * 6))
+    assert main(["analyze", "--pending", "3", "--db", url]) == 2
+
+
+def test_dashboard_shows_the_analysis_as_unverified(tmp_path, monkeypatch):
+    pytest.importorskip("flask")
+    from surya_kundal.dashboard.app import create_app
+
+    url, factory = _db_with_sessions(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("surya_kundal.cli.OllamaClient", lambda u: _client([json.dumps(GOOD)]))
+    main(["analyze", "--pending", "1", "--db", url])
+    page = create_app(factory).test_client().get(f"/sessions/{SESSION_A}").get_data(as_text=True)
+    assert "AI-generated, unverified" in page and "Guessed root" in page

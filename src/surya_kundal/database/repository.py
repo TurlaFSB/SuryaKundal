@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
@@ -14,6 +15,7 @@ from surya_kundal.database.models import (
     HoneypotSession,
     IngestOffset,
     Login,
+    SessionAnalysis,
     TunnelRequest,
     Upload,
 )
@@ -175,3 +177,39 @@ def save_offset(db: Session, path: str, inode: int, offset: int) -> None:
         db.add(IngestOffset(path=path, inode=inode, offset=offset, updated_at=now))
     else:
         row.inode, row.offset, row.updated_at = inode, offset, now
+
+
+def save_analysis(
+    db: Session,
+    session_id: str,
+    *,
+    summary: str,
+    intent: str,
+    sophistication: str,
+    confidence: str,
+    model: str,
+    prompt_version: str,
+) -> None:
+    """Store (or replace) the machine-written analysis of one session."""
+    row = db.get(SessionAnalysis, session_id)
+    if row is None:
+        row = SessionAnalysis(session_id=session_id)
+        db.add(row)
+    row.summary, row.intent, row.sophistication = summary, intent, sophistication
+    row.confidence, row.model, row.prompt_version = confidence, model, prompt_version
+    row.created_at = datetime.now(UTC)
+
+
+def sessions_needing_analysis(db: Session, limit: int) -> list[HoneypotSession]:
+    """Newest sessions where the attacker ran commands and no analysis exists yet."""
+    return list(
+        db.scalars(
+            select(HoneypotSession)
+            .where(
+                exists().where(Command.session_id == HoneypotSession.id),
+                ~exists().where(SessionAnalysis.session_id == HoneypotSession.id),
+            )
+            .order_by(HoneypotSession.start_time.desc())
+            .limit(limit)
+        )
+    )

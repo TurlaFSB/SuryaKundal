@@ -13,6 +13,14 @@
   </dl>
 </section>
 
+{% if d.analysis %}
+<section class="panel">
+  <h2>Summary <span class="pill">AI-generated, unverified</span></h2>
+  <p>{{ d.analysis.summary | p }}</p>
+  <p class="muted">Intent: {{ d.analysis.intent | p }} &middot; sophistication: {{ d.analysis.sophistication | p }} &middot; confidence: {{ d.analysis.confidence | p }} &middot; written by {{ d.analysis.model | p }}. Check it against the commands below; the techniques come from our rules, not from the model.</p>
+</section>
+{% endif %}
+
 {% if d.session_matches %}
 <section class="panel">
   <h2>Session-level techniques</h2>
