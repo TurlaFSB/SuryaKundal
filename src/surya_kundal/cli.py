@@ -183,6 +183,8 @@ def main(argv: list[str] | None = None) -> int:
         level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # httpx logs full request URLs at INFO, including signed download links.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     args = _build_parser().parse_args(argv)
     handlers = {"ingest": _run_ingest, "watch": _run_watch, "list": _run_list, "geoip": _run_geoip}
     return handlers[args.action](args)
