@@ -1,4 +1,4 @@
-"""Command-line entry point: ``surya-kundal ingest | watch | list | geoip``."""
+"""Command-line entry point: ``surya-kundal ingest | watch | list | geoip | enrich``."""
 
 from __future__ import annotations
 
@@ -14,14 +14,24 @@ from dotenv import load_dotenv
 from sqlalchemy import func, select
 
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
-from surya_kundal.database.models import Command, HoneypotSession, Login
+from surya_kundal.database.models import Command, HoneypotSession, IpGeo, IpIntel, Login
+from surya_kundal.enrichment.abuseipdb import AbuseIPDBClient
+from surya_kundal.enrichment.enrich import (
+    DEFAULT_ABUSE_BUDGET,
+    DEFAULT_VT_BUDGET,
+    enrich_pending,
+)
 from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
+from surya_kundal.enrichment.http import ProviderError
+from surya_kundal.enrichment.tor import TorExitList
+from surya_kundal.enrichment.virustotal import VirusTotalClient
 from surya_kundal.ingest import ingest_log
 from surya_kundal.watcher import Watcher
 
 DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
 DEFAULT_GEOIP_DIR = "data/geoip"
+DEFAULT_TOR_CACHE = "data/tor_exit_nodes.txt"
 
 
 def _add_log_and_db_options(subparser: argparse.ArgumentParser) -> None:
@@ -57,6 +67,16 @@ def _build_parser() -> argparse.ArgumentParser:
     listing = sub.add_parser("list", help="show stored sessions, newest first")
     listing.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
     listing.add_argument("--limit", type=int, default=20, help="maximum rows to show")
+
+    enrich = sub.add_parser("enrich", help="add geolocation and threat intel to stored sessions")
+    enrich.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
+    enrich.add_argument("--geoip-dir", type=Path, default=None, help="GeoLite2 directory")
+    enrich.add_argument(
+        "--abuse-budget", type=int, default=DEFAULT_ABUSE_BUDGET, help="max AbuseIPDB checks/day"
+    )
+    enrich.add_argument(
+        "--vt-budget", type=int, default=DEFAULT_VT_BUDGET, help="max VirusTotal lookups/day"
+    )
 
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
@@ -107,6 +127,50 @@ def _run_geoip(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_enrich(args: argparse.Namespace) -> int:
+    engine = create_db_engine(args.db)
+    init_db(engine)
+
+    geo = GeoIPLookup(args.geoip_dir or Path(os.environ.get("GEOIP_DB_DIR", DEFAULT_GEOIP_DIR)))
+    tor = TorExitList(os.environ.get("TOR_EXIT_LIST_PATH", DEFAULT_TOR_CACHE))
+    abuse = vt = None
+    try:
+        if os.environ.get("ABUSEIPDB_API_KEY", "").strip():
+            abuse = AbuseIPDBClient(os.environ["ABUSEIPDB_API_KEY"].strip())
+        else:
+            print("note: ABUSEIPDB_API_KEY not set; skipping AbuseIPDB", file=sys.stderr)
+        if os.environ.get("VIRUSTOTAL_API_KEY", "").strip():
+            vt = VirusTotalClient(os.environ["VIRUSTOTAL_API_KEY"].strip())
+        else:
+            print("note: VIRUSTOTAL_API_KEY not set; skipping VirusTotal", file=sys.stderr)
+        with make_session_factory(engine)() as db:
+            result = enrich_pending(
+                db,
+                geo=geo if geo.available else None,
+                tor=tor if tor.load() else None,
+                abuse=abuse,
+                virustotal_client=vt,
+                abuse_budget=args.abuse_budget,
+                vt_budget=args.vt_budget,
+            )
+    except ProviderError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        geo.close()
+        for client in (abuse, vt):
+            if client is not None:
+                client.close()
+
+    print(
+        f"Enriched: {result.geo} geo, {result.tor} tor, {result.abuse} AbuseIPDB, "
+        f"{result.files} VirusTotal; {result.errors} error(s)."
+    )
+    for provider in result.stopped:
+        print(f"note: {provider} limit reached; remaining items wait for the next run")
+    return 1 if result.errors else 0
+
+
 def _run_watch(args: argparse.Namespace) -> int:
     log_path = _resolve_log_path(args)
     if args.interval <= 0:
@@ -151,8 +215,19 @@ def _run_list(args: argparse.Namespace) -> int:
 
     logins = func.count(Login.id.distinct())
     commands = func.count(Command.id.distinct())
+    country = select(IpGeo.country_code).where(IpGeo.ip == HoneypotSession.src_ip).scalar_subquery()
+    abuse = (
+        select(IpIntel.score)
+        .where(IpIntel.ip == HoneypotSession.src_ip, IpIntel.provider == "abuseipdb")
+        .scalar_subquery()
+    )
+    tor = (
+        select(IpIntel.flagged)
+        .where(IpIntel.ip == HoneypotSession.src_ip, IpIntel.provider == "tor")
+        .scalar_subquery()
+    )
     query = (
-        select(HoneypotSession, logins, commands)
+        select(HoneypotSession, logins, commands, country, abuse, tor)
         .outerjoin(Login)
         .outerjoin(Command)
         .group_by(HoneypotSession.id)
@@ -167,12 +242,17 @@ def _run_list(args: argparse.Namespace) -> int:
         print("No sessions stored yet. Run: surya-kundal ingest")
         return 0
 
-    print(f"{'SESSION':<14}{'SOURCE IP':<18}{'START (UTC)':<22}{'LOGINS':>7}{'CMDS':>6}")
-    for session, login_count, command_count in rows:
+    print(
+        f"{'SESSION':<14}{'SOURCE IP':<18}{'START (UTC)':<22}{'LOGINS':>7}{'CMDS':>6}"
+        f"  {'CC':<4}{'ABUSE':<7}TOR"
+    )
+    for session, login_count, command_count, cc, abuse_score, is_tor in rows:
         start = session.start_time.strftime("%Y-%m-%d %H:%M:%S") if session.start_time else "-"
         print(
             f"{session.id:<14}{session.src_ip or '-':<18}{start:<22}"
             f"{login_count:>7}{command_count:>6}"
+            f"  {cc or '-':<4}{'-' if abuse_score is None else abuse_score:<7}"
+            f"{'-' if is_tor is None else ('yes' if is_tor else 'no')}"
         )
     return 0
 
@@ -186,7 +266,13 @@ def main(argv: list[str] | None = None) -> int:
     # httpx logs full request URLs at INFO, including signed download links.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     args = _build_parser().parse_args(argv)
-    handlers = {"ingest": _run_ingest, "watch": _run_watch, "list": _run_list, "geoip": _run_geoip}
+    handlers = {
+        "ingest": _run_ingest,
+        "watch": _run_watch,
+        "list": _run_list,
+        "geoip": _run_geoip,
+        "enrich": _run_enrich,
+    }
     return handlers[args.action](args)
 
 

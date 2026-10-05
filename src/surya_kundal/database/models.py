@@ -1,8 +1,10 @@
 """SQLAlchemy models for captured honeypot sessions.
 
 One row per attacker visit in ``sessions``; the things that happened during the
-visit hang off it in ``logins``, ``commands`` and ``downloads``. Threat-intel and
-ATT&CK tables are added in their own phases.
+visit hang off it in ``logins``, ``commands`` and ``downloads``. Threat-intel
+results live in ``ip_geo``, ``ip_intel`` and ``file_intel`` (keyed by IP address or
+file hash, so each is looked up once however many sessions share it). ATT&CK tables
+are added in their own phase.
 
 Rows are only ever added, never rewritten, so other tables can safely point at a
 command or download by ID.
@@ -13,8 +15,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -152,3 +156,58 @@ class Download(Base):
     timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     session: Mapped[HoneypotSession] = relationship(back_populates="downloads")
+
+
+class IpGeo(Base):
+    """Offline geolocation and ASN facts for one IP (MaxMind GeoLite2)."""
+
+    __tablename__ = "ip_geo"
+
+    ip: Mapped[str] = mapped_column(String(45), primary_key=True)
+    country_code: Mapped[str | None] = mapped_column(String(2), index=True)
+    country_name: Mapped[str | None] = mapped_column(String(128))
+    city: Mapped[str | None] = mapped_column(String(128))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    accuracy_radius_km: Mapped[int | None] = mapped_column(Integer)
+    asn: Mapped[int | None] = mapped_column(Integer, index=True)
+    as_org: Mapped[str | None] = mapped_column(String(255))
+    looked_up_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class IpIntel(Base):
+    """One provider's verdict on one IP. Provider-agnostic: new providers need no migration.
+
+    ``score`` is a 0-100 risk score when the provider supplies one (AbuseIPDB's
+    confidence score). ``flagged`` is a yes/no fact (Tor: is a current exit node).
+    ``payload`` keeps the provider's answer so nothing is lost.
+    """
+
+    __tablename__ = "ip_intel"
+    __table_args__ = (UniqueConstraint("ip", "provider", name="uq_ip_intel_provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(45), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    score: Mapped[int | None] = mapped_column(Integer)
+    flagged: Mapped[bool | None] = mapped_column(Boolean)
+    payload: Mapped[dict | None] = mapped_column(JSON)
+
+
+class FileIntel(Base):
+    """One provider's verdict on a file hash that an attacker downloaded."""
+
+    __tablename__ = "file_intel"
+    __table_args__ = (UniqueConstraint("sha256", "provider", name="uq_file_intel_provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    found: Mapped[bool] = mapped_column(Boolean)
+    malicious: Mapped[int | None] = mapped_column(Integer)
+    suspicious: Mapped[int | None] = mapped_column(Integer)
+    engines: Mapped[int | None] = mapped_column(Integer)
+    label: Mapped[str | None] = mapped_column(String(255))
+    payload: Mapped[dict | None] = mapped_column(JSON)

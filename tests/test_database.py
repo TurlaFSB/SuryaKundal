@@ -51,6 +51,9 @@ def test_init_db_creates_expected_tables(engine):
         "logins",
         "commands",
         "downloads",
+        "ip_geo",
+        "ip_intel",
+        "file_intel",
     }
 
 

@@ -109,3 +109,22 @@ def test_cli_ingest_reports_missing_log(tmp_path, capsys):
 def test_cli_list_on_empty_database(tmp_path, capsys):
     assert main(["list", "--db", f"sqlite:///{tmp_path}/empty.db"]) == 0
     assert "No sessions stored yet" in capsys.readouterr().out
+
+
+def test_cli_enrich_without_keys_still_runs_offline_providers(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("surya_kundal.cli.load_dotenv", lambda *a, **k: None)
+    for name in ("ABUSEIPDB_API_KEY", "VIRUSTOTAL_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("TOR_EXIT_LIST_PATH", str(tmp_path / "tor.txt"))
+    monkeypatch.setattr("surya_kundal.cli.TorExitList.load", lambda self, **k: False)
+    log = _write_log(tmp_path / "cowrie.json", SESSION_A_EVENTS)
+    db_url = f"sqlite:///{tmp_path}/e.db"
+    main(["ingest", "--log", str(log), "--db", db_url])
+    capsys.readouterr()
+
+    code = main(["enrich", "--db", db_url, "--geoip-dir", str(tmp_path / "none")])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "ABUSEIPDB_API_KEY not set" in captured.err
+    assert "Enriched: 0 geo" in captured.out

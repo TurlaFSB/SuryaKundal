@@ -18,9 +18,9 @@ A honeypot's native output is a flat stream of events: one JSON line per connect
 | Session reconstruction from the event stream: credentials tried, commands typed, files downloaded (with SHA-256), timing, client version, HASSH fingerprint | Working |
 | Durable SQLite storage with idempotent, failure-isolated import | Working |
 | Live log following: events are stored within a second of being written, across log rotation | Working |
-| `surya-kundal ingest` / `watch` / `list` command-line tools | Working |
+| `surya-kundal ingest` / `watch` / `list` / `enrich` / `geoip` command-line tools | Working |
 | Offline IP geolocation and ASN lookup (MaxMind GeoLite2) with a safe, validated database updater: `surya-kundal geoip update` / `geoip lookup` | Working |
-| Threat-intelligence enrichment of attacker IPs (AbuseIPDB, VirusTotal, Tor exit list), cached per IP to respect free-tier limits | In progress |
+| Threat-intelligence enrichment: AbuseIPDB score per attacker IP, Tor exit-node check, VirusTotal verdict per downloaded file. Each IP and hash is looked up once and cached; daily budgets stay under free-tier limits and survive restarts. `surya-kundal enrich` | Working (live API check pending) |
 | MITRE ATT&CK technique mapping of attacker commands | Planned |
 | Wazuh SIEM rules for high-risk behaviour | Planned |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
@@ -57,6 +57,9 @@ Everything from the log parser onward is code in this repository. Cowrie itself 
 | `logins` | credential attempt | username, password, success flag, timestamp |
 | `commands` | command typed | command text, timestamp (read back in chronological order) |
 | `downloads` | file fetched by the attacker | URL, SHA-256, timestamp |
+| `ip_geo` | attacker IP | country, city, coordinates, ASN and organisation |
+| `ip_intel` | IP per provider | AbuseIPDB confidence score, Tor exit flag, raw provider payload |
+| `file_intel` | file hash per provider | VirusTotal detections, engine count, threat label |
 
 ## Engineering approach
 
@@ -110,7 +113,7 @@ The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_k
 | 0 | Repo skeleton, tests, CI | Done |
 | 1 | Cowrie running, log parser | Done |
 | 2 | Database layer and live log watcher | Done |
-| 3 | Threat-intel enrichment with caching and rate limits | Planned |
+| 3 | Threat-intel enrichment with caching and rate limits | Built; live API verification in progress |
 | 4 | MITRE ATT&CK mapping engine | Planned |
 | 5 | Wazuh custom rules | Planned |
 | 6 | Flask dashboard | Planned |
@@ -126,7 +129,7 @@ Only free tiers and free offline datasets are used. No paid services are require
 src/surya_kundal/
     parser/        Cowrie log parsing
     database/      SQLAlchemy models, engine setup, storage
-    enrichment/    Threat-intel clients (Phase 3)
+    enrichment/    GeoIP, AbuseIPDB, VirusTotal, Tor list, enrichment pass
     mapping/       ATT&CK mapping engine (Phase 4)
     dashboard/     Flask web UI (Phase 6)
     ingest.py      Log import orchestration
