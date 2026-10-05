@@ -41,7 +41,7 @@ class TorExitList:
         *,
         client: httpx.Client | None = None,
         url: str = EXIT_LIST_URL,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
     ) -> None:
         self._path = Path(cache_path).expanduser()
         self._client = client

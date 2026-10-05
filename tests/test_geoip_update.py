@@ -213,7 +213,7 @@ def test_update_all_fetches_both_editions(tmp_path):
 def test_cli_geoip_update_without_credentials_fails_cleanly(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("MAXMIND_ACCOUNT_ID", raising=False)
     monkeypatch.delenv("MAXMIND_LICENSE_KEY", raising=False)
-    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: None)  # ignore a developer's .env
+    monkeypatch.setattr(cli, "load_env_file", lambda *a, **k: None)  # ignore a developer's .env
 
     code = cli.main(["geoip", "update", "--dir", str(tmp_path)])
 

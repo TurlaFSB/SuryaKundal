@@ -70,7 +70,7 @@ class HoneypotSession(Base):
     start_time: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     end_time: Mapped[datetime | None] = mapped_column(UTCDateTime)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
-    client_version: Mapped[str | None] = mapped_column(String(255))
+    client_version: Mapped[str | None] = mapped_column(Text)
     hassh: Mapped[str | None] = mapped_column(String(32), index=True)
 
     # Children are listed in the order they happened (timestamp, then insertion order).
@@ -112,8 +112,8 @@ class Login(Base):
     session_id: Mapped[str] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
-    username: Mapped[str | None] = mapped_column(String(255))
-    password: Mapped[str | None] = mapped_column(String(255))
+    username: Mapped[str | None] = mapped_column(Text)
+    password: Mapped[str | None] = mapped_column(Text)
     success: Mapped[bool] = mapped_column(Boolean)
     timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
@@ -245,7 +245,9 @@ class TechniqueMatch(Base):
     session_id: Mapped[str] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
-    command_id: Mapped[int | None] = mapped_column(ForeignKey("commands.id", ondelete="CASCADE"))
+    command_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commands.id", ondelete="CASCADE"), index=True
+    )
     technique_id: Mapped[str] = mapped_column(String(12), index=True)
     tactics: Mapped[str] = mapped_column(String(255))  # comma-separated, e.g. "stealth,persistence"
     rule_id: Mapped[str] = mapped_column(String(64))

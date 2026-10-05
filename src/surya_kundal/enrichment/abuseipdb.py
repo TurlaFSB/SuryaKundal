@@ -20,7 +20,7 @@ class AbuseIPDBClient:
         *,
         max_age_days: int = 90,
         client: httpx.Client | None = None,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
     ) -> None:
         if not api_key:
             raise ProviderError("AbuseIPDB API key is not set")

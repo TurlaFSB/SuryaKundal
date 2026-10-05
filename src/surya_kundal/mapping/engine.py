@@ -35,6 +35,11 @@ CONFIDENCES = ("low", "medium", "high")
 SCOPES = ("segment", "command")
 SESSION_RULES_REVISION = "1"  # bump when the session-level logic below changes
 
+# Commands are attacker-controlled, and regular expressions can be made to run slowly
+# by crafted input. Anything longer than this is analysed as its first and last
+# halves (the tail matters: ``... | base64 -d | sh`` ends a long encoded payload).
+MAX_ANALYSED_CHARS = 2048
+
 FAILED_LOGIN_THRESHOLD = 3
 FAILED_LOGIN_HIGH = 10
 DEFAULT_USERNAMES = frozenset(
@@ -196,9 +201,18 @@ def _segments_of(command: str) -> list[str]:
     return [normalize_segment(p) for p in pieces]
 
 
+def bound_command(command: str) -> str:
+    """Return the command, or its head and tail if it is longer than the analysis limit."""
+    if len(command) <= MAX_ANALYSED_CHARS:
+        return command
+    half = MAX_ANALYSED_CHARS // 2
+    return f"{command[:half]} {command[-half:]}"
+
+
 def map_command(command: str, ruleset: RuleSet | None = None) -> list[Match]:
     """Return every rule that matches this command line (at most one hit per rule)."""
     ruleset = ruleset or load_rules()
+    command = bound_command(command)
     segments = _segments_of(command)
     matches: list[Match] = []
     for rule in ruleset.rules:

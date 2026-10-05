@@ -112,11 +112,11 @@ def test_cli_list_on_empty_database(tmp_path, capsys):
 
 
 def test_cli_enrich_without_keys_still_runs_offline_providers(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr("surya_kundal.cli.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("surya_kundal.cli.load_env_file", lambda *a, **k: None)
     for name in ("ABUSEIPDB_API_KEY", "VIRUSTOTAL_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("TOR_EXIT_LIST_PATH", str(tmp_path / "tor.txt"))
-    monkeypatch.setattr("surya_kundal.cli.TorExitList.load", lambda self, **k: False)
+    monkeypatch.setattr("surya_kundal.pipeline.TorExitList.load", lambda self, **k: False)
     log = _write_log(tmp_path / "cowrie.json", SESSION_A_EVENTS)
     db_url = f"sqlite:///{tmp_path}/e.db"
     main(["ingest", "--log", str(log), "--db", db_url])

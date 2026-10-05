@@ -27,7 +27,7 @@ def send(
     url: str,
     *,
     retries: int = 2,
-    sleep: Callable[[float], None] = time.sleep,
+    sleep: Callable[[float], object] = time.sleep,
     **kwargs,
 ) -> httpx.Response:
     """Send a request, retrying network errors and 5xx responses with backoff.

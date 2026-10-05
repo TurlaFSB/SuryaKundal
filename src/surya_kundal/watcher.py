@@ -17,6 +17,7 @@ import logging
 import os
 import threading
 from pathlib import Path
+from typing import BinaryIO
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -26,6 +27,12 @@ from surya_kundal.parser.log_parser import parse_event_line
 
 logger = logging.getLogger(__name__)
 
+# A line longer than this without a newline is not a Cowrie event; dropping it stops a
+# runaway or hostile file from growing memory without limit.
+MAX_PARTIAL_BYTES = 16 * 1024 * 1024
+# If the database stays unavailable, stop buffering after this many events and say so.
+MAX_RETRY_EVENTS = 200_000
+
 
 class LogTailer:
     """Return the complete lines appended to ``path`` since the previous call."""
@@ -33,7 +40,7 @@ class LogTailer:
     def __init__(self, path: Path, *, from_end: bool = False) -> None:
         self.path = Path(path)
         self._from_end = from_end
-        self._handle = None
+        self._handle: BinaryIO | None = None
         self._partial = b""
 
     def read_new_lines(self) -> list[str]:
@@ -51,7 +58,7 @@ class LogTailer:
             self._close()
             if self._open(from_start=True):
                 lines.extend(self._drain())
-        elif self._truncated():
+        elif self._handle is not None and self._truncated():
             logger.info("Log %s was truncated; reading from the start", self.path)
             self._handle.seek(0)
             self._partial = b""
@@ -90,11 +97,18 @@ class LogTailer:
 
     def _drain(self) -> list[str]:
         """Read everything currently available, keeping a half-written last line."""
+        if self._handle is None:
+            return []
         chunk = self._handle.read()
         if not chunk:
             return []
         data = self._partial + chunk
         *complete, self._partial = data.split(b"\n")
+        if len(self._partial) > MAX_PARTIAL_BYTES:
+            logger.error(
+                "Discarding %d bytes with no line break in %s", len(self._partial), self.path
+            )
+            self._partial = b""
         return [line.decode("utf-8", errors="replace") for line in complete]
 
     def _rotated(self) -> bool:
@@ -102,10 +116,14 @@ class LogTailer:
             on_disk = os.stat(self.path)
         except FileNotFoundError:
             return False  # between rotation and the new file appearing
+        if self._handle is None:
+            return False
         current = os.fstat(self._handle.fileno())
         return (on_disk.st_ino, on_disk.st_dev) != (current.st_ino, current.st_dev)
 
     def _truncated(self) -> bool:
+        if self._handle is None:
+            return False
         return os.fstat(self._handle.fileno()).st_size < self._handle.tell()
 
 
@@ -123,10 +141,15 @@ class Watcher:
         self._tailer = LogTailer(log_path, from_end=from_end)
         self._session_factory = session_factory
         self._interval = interval
+        self._unsaved: list[dict] = []  # events a failed database write must not lose
 
     def poll_once(self) -> int:
-        """Store any new events. Returns the number of events read this cycle."""
-        events = []
+        """Store any new events. Returns the number of events stored this cycle.
+
+        Events whose database write fails stay in memory and are retried on the next
+        cycle, so a locked or briefly unavailable database delays data, never loses it.
+        """
+        events = self._unsaved
         for line in self._tailer.read_new_lines():
             event = parse_event_line(line)
             if event is not None:
@@ -139,12 +162,16 @@ class Watcher:
                 result = store_events(db, events)
                 db.commit()
         except SQLAlchemyError:
-            # Nothing is lost for good: the next start replays the log, and
-            # storing is idempotent.
-            logger.exception("Database error while storing %d events", len(events))
+            logger.exception("Database error while storing %d events; will retry", len(events))
+            if len(events) > MAX_RETRY_EVENTS:
+                logger.error("Dropping %d buffered events", len(events) - MAX_RETRY_EVENTS)
+                events = events[-MAX_RETRY_EVENTS:]
+            self._unsaved = events
             return 0
-        logger.debug("Stored %d events (%d sessions)", len(events), result.saved)
-        return len(events)
+        stored = len(events)
+        self._unsaved = []
+        logger.debug("Stored %d events (%d sessions)", stored, result.saved)
+        return stored
 
     def run(self, stop: threading.Event | None = None) -> None:
         """Poll until ``stop`` is set. Safe to interrupt at any time."""

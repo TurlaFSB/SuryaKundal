@@ -36,7 +36,7 @@ class VirusTotalClient:
         api_key: str,
         *,
         client: httpx.Client | None = None,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not api_key:

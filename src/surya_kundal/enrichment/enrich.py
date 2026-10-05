@@ -9,6 +9,7 @@ reports its limit stops being called for the rest of the run.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -48,11 +49,12 @@ def _day_start(now: datetime) -> datetime:
 
 
 def _used_today(db: Session, model, provider: str, now: datetime) -> int:
-    return db.scalar(
+    count = db.scalar(
         select(func.count())
         .select_from(model)
         .where(model.provider == provider, model.fetched_at >= _day_start(now))
     )
+    return count or 0
 
 
 def _upsert_ip_intel(db, ip, provider, now, *, score=None, flagged=None, payload=None) -> None:
@@ -70,7 +72,7 @@ def _public_ips_newest_first(db: Session) -> list[str]:
         .group_by(HoneypotSession.src_ip)
         .order_by(func.max(HoneypotSession.start_time).desc())
     ).scalars()
-    return [ip for ip in rows if is_public_ip(ip)]
+    return [ip for ip in rows if ip and is_public_ip(ip)]
 
 
 def _enrich_geo(db: Session, ips: list[str], geo: GeoIPLookup, now, result: EnrichResult) -> None:
@@ -103,7 +105,13 @@ def _enrich_tor(db: Session, ips: list[str], tor: TorExitList, now, result: Enri
 
 
 def _enrich_abuse(
-    db: Session, ips: list[str], client: AbuseIPDBClient, budget: int, now, result: EnrichResult
+    db: Session,
+    ips: list[str],
+    client: AbuseIPDBClient,
+    budget: int,
+    now,
+    result: EnrichResult,
+    should_stop: Callable[[], bool],
 ) -> None:
     fetched = {
         row.ip: row.fetched_at
@@ -116,6 +124,8 @@ def _enrich_abuse(
     )
     remaining = budget - _used_today(db, IpIntel, abuseipdb.PROVIDER, now)
     for ip in (never + stale)[: max(remaining, 0)]:
+        if should_stop():
+            break
         try:
             data = client.check(ip)
         except QuotaExceeded as exc:
@@ -141,16 +151,23 @@ def _file_is_stale(row: FileIntel, now: datetime) -> bool:
 
 
 def _enrich_files(
-    db: Session, client: VirusTotalClient, budget: int, now, result: EnrichResult
+    db: Session,
+    client: VirusTotalClient,
+    budget: int,
+    now,
+    result: EnrichResult,
+    should_stop: Callable[[], bool],
 ) -> None:
-    hashes = list(
-        db.scalars(
+    hashes = [
+        sha
+        for sha in db.scalars(
             select(Download.sha256)
             .where(Download.sha256.is_not(None))
             .group_by(Download.sha256)
             .order_by(func.max(Download.timestamp).desc())
         )
-    )
+        if sha
+    ]
     rows = {
         r.sha256: r for r in db.scalars(select(FileIntel).where(FileIntel.provider == "virustotal"))
     }
@@ -158,6 +175,8 @@ def _enrich_files(
     stale = [h for h in hashes if h in rows and _file_is_stale(rows[h], now)]
     remaining = budget - _used_today(db, FileIntel, virustotal.PROVIDER, now)
     for sha in (never + stale)[: max(remaining, 0)]:
+        if should_stop():
+            break
         try:
             report = client.lookup_file(sha)
         except QuotaExceeded as exc:
@@ -179,9 +198,8 @@ def _enrich_files(
             row.suspicious = int(stats.get("suspicious", 0))
             row.engines = sum(int(v) for v in stats.values())
             classification = report.get("popular_threat_classification") or {}
-            row.label = classification.get("suggested_threat_label") or report.get(
-                "meaningful_name"
-            )
+            label = classification.get("suggested_threat_label") or report.get("meaningful_name")
+            row.label = str(label)[:255] if label else None
         db.commit()
         result.files += 1
 
@@ -196,6 +214,7 @@ def enrich_pending(
     abuse_budget: int = DEFAULT_ABUSE_BUDGET,
     vt_budget: int = DEFAULT_VT_BUDGET,
     now: datetime | None = None,
+    should_stop: Callable[[], bool] = lambda: False,
 ) -> EnrichResult:
     """Run one enrichment pass. Any provider left as None is simply skipped."""
     now = now or datetime.now(UTC)
@@ -206,7 +225,7 @@ def enrich_pending(
     if tor is not None:
         _enrich_tor(db, ips, tor, now, result)
     if abuse is not None:
-        _enrich_abuse(db, ips, abuse, abuse_budget, now, result)
+        _enrich_abuse(db, ips, abuse, abuse_budget, now, result, should_stop)
     if virustotal_client is not None:
-        _enrich_files(db, virustotal_client, vt_budget, now, result)
+        _enrich_files(db, virustotal_client, vt_budget, now, result, should_stop)
     return result

@@ -116,9 +116,10 @@ class GeoIPLookup:
     @staticmethod
     def _safe_get(reader: maxminddb.Reader, ip: str) -> dict | None:
         try:
-            return reader.get(ip)
+            record = reader.get(ip)
         except (ValueError, maxminddb.InvalidDatabaseError):
             return None
+        return record if isinstance(record, dict) else None
 
     def close(self) -> None:
         for reader in (self._city, self._asn):
