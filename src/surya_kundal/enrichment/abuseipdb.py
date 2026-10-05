@@ -53,7 +53,7 @@ class AbuseIPDBClient:
             int(data["abuseConfidenceScore"])
         except (ValueError, KeyError, TypeError) as exc:
             raise ProviderError("AbuseIPDB returned an unexpected response") from exc
-        return data
+        return dict(data)
 
     def close(self) -> None:
         self._client.close()

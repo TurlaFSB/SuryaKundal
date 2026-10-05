@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from surya_kundal import __version__
 from surya_kundal.config import Settings, load_env_file
@@ -112,7 +113,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _open_database(args: argparse.Namespace, settings: Settings):
+def _open_database(args: argparse.Namespace, settings: Settings) -> sessionmaker[Session]:
     engine = create_db_engine(args.db or settings.database_url)
     init_db(engine)
     return make_session_factory(engine)

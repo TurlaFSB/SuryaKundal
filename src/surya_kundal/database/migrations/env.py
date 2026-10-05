@@ -7,7 +7,7 @@ command for developers writing new revisions (which reads DATABASE_URL).
 from __future__ import annotations
 
 from alembic import context
-from sqlalchemy import create_engine
+from sqlalchemy import Connection, create_engine
 
 from surya_kundal.config import Settings
 from surya_kundal.database.models import Base
@@ -16,7 +16,7 @@ config = context.config
 target_metadata = Base.metadata
 
 
-def _configure(connection) -> None:
+def _configure(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

@@ -183,7 +183,7 @@ def test_archive_without_an_mmdb_is_rejected(tmp_path):
     readme.write_text("hello")
     archive = make_archive(readme, member_name="GeoLite2-City_1/README.txt")
 
-    with pytest.raises(GeoIPUpdateError, match="no .mmdb"):
+    with pytest.raises(GeoIPUpdateError, match=r"no \.mmdb"):
         update_database(
             "GeoLite2-City", tmp_path / "geo", ACCOUNT, KEY, client=_client(_serve(archive))
         )

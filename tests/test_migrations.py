@@ -14,7 +14,9 @@ from surya_kundal.database.models import Base, HoneypotSession
 
 @pytest.fixture
 def engine(tmp_path):
-    return create_engine(f"sqlite:///{tmp_path}/m.db")
+    engine = create_engine(f"sqlite:///{tmp_path}/m.db")
+    yield engine
+    engine.dispose()
 
 
 def _head() -> str:

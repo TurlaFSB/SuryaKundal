@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.engine import make_url
@@ -34,7 +35,7 @@ def create_db_engine(url: str | None = None, *, echo: bool = False) -> Engine:
     return engine
 
 
-def _configure_sqlite(dbapi_connection, _connection_record) -> None:
+def _configure_sqlite(dbapi_connection: Any, _connection_record: Any) -> None:
     """Apply per-connection SQLite settings.
 
     - foreign_keys: SQLite ignores foreign keys unless this is switched on.

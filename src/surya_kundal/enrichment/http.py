@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from typing import Any
 
 import httpx
 
@@ -17,7 +18,7 @@ class ProviderError(Exception):
     """A provider call failed. Messages never contain credentials or request URLs."""
 
 
-class QuotaExceeded(ProviderError):  # noqa: N818 - reads better than QuotaExceededError
+class QuotaExceeded(ProviderError):
     """The provider's rate or daily limit was hit; stop calling it for now."""
 
 
@@ -28,7 +29,7 @@ def send(
     *,
     retries: int = 2,
     sleep: Callable[[float], object] = time.sleep,
-    **kwargs,
+    **kwargs: Any,
 ) -> httpx.Response:
     """Send a request, retrying network errors and 5xx responses with backoff.
 

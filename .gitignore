@@ -35,3 +35,10 @@ dist/
 
 # MaxMind databases are licensed, never commit
 *.mmdb
+
+# Test tooling caches
+.hypothesis/
+.coverage
+.mypy_cache/
+coverage.xml
+htmlcov/

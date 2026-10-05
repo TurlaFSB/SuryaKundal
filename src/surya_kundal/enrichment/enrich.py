@@ -48,7 +48,9 @@ def _day_start(now: datetime) -> datetime:
     return now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def _used_today(db: Session, model, provider: str, now: datetime) -> int:
+def _used_today(
+    db: Session, model: type[IpIntel] | type[FileIntel], provider: str, now: datetime
+) -> int:
     count = db.scalar(
         select(func.count())
         .select_from(model)
@@ -57,7 +59,16 @@ def _used_today(db: Session, model, provider: str, now: datetime) -> int:
     return count or 0
 
 
-def _upsert_ip_intel(db, ip, provider, now, *, score=None, flagged=None, payload=None) -> None:
+def _upsert_ip_intel(
+    db: Session,
+    ip: str,
+    provider: str,
+    now: datetime,
+    *,
+    score: int | None = None,
+    flagged: bool | None = None,
+    payload: dict | None = None,
+) -> None:
     row = db.scalar(select(IpIntel).where(IpIntel.ip == ip, IpIntel.provider == provider))
     if row is None:
         row = IpIntel(ip=ip, provider=provider)
@@ -75,7 +86,9 @@ def _public_ips_newest_first(db: Session) -> list[str]:
     return [ip for ip in rows if ip and is_public_ip(ip)]
 
 
-def _enrich_geo(db: Session, ips: list[str], geo: GeoIPLookup, now, result: EnrichResult) -> None:
+def _enrich_geo(
+    db: Session, ips: list[str], geo: GeoIPLookup, now: datetime, result: EnrichResult
+) -> None:
     if not geo.available:
         return
     known = set(db.scalars(select(IpGeo.ip)))
@@ -92,7 +105,9 @@ def _enrich_geo(db: Session, ips: list[str], geo: GeoIPLookup, now, result: Enri
     db.commit()
 
 
-def _enrich_tor(db: Session, ips: list[str], tor: TorExitList, now, result: EnrichResult) -> None:
+def _enrich_tor(
+    db: Session, ips: list[str], tor: TorExitList, now: datetime, result: EnrichResult
+) -> None:
     existing = {row.ip: row for row in db.scalars(select(IpIntel).where(IpIntel.provider == "tor"))}
     for ip in ips:
         is_exit = ip in tor
@@ -109,7 +124,7 @@ def _enrich_abuse(
     ips: list[str],
     client: AbuseIPDBClient,
     budget: int,
-    now,
+    now: datetime,
     result: EnrichResult,
     should_stop: Callable[[], bool],
 ) -> None:
@@ -154,7 +169,7 @@ def _enrich_files(
     db: Session,
     client: VirusTotalClient,
     budget: int,
-    now,
+    now: datetime,
     result: EnrichResult,
     should_stop: Callable[[], bool],
 ) -> None:

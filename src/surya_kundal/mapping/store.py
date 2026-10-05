@@ -17,7 +17,7 @@ from surya_kundal.database.models import (
     TechniqueMatch,
 )
 from surya_kundal.mapping.attack import load_catalog
-from surya_kundal.mapping.engine import RuleSet, load_rules, map_command, map_logins
+from surya_kundal.mapping.engine import Match, RuleSet, load_rules, map_command, map_logins
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class MapResult:
     failed: int = 0
 
 
-def _counts(db: Session, model) -> dict[str, int]:
+def _counts(db: Session, model: type[Command] | type[Login]) -> dict[str, int]:
     query = select(model.session_id, func.count()).group_by(model.session_id)
     return dict(db.execute(query).all())
 
@@ -62,7 +62,7 @@ def map_session(db: Session, session_id: str, ruleset: RuleSet | None = None) ->
 
     rows: list[TechniqueMatch] = []
 
-    def add(match, command_id=None) -> None:
+    def add(match: Match, command_id: int | None = None) -> None:
         technique = catalog.get(match.technique)
         rows.append(
             TechniqueMatch(
