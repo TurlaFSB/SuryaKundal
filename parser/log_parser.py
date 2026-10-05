@@ -20,8 +20,11 @@ def group_by_session(events):
     """Return {session_id: [event, event, ...]}."""
     sessions = defaultdict(list)
     for event in events:
-        # TODO 1: append the event to the list for its session ID
-        pass
+        session_id = event.get("session")
+        if session_id is None:
+            logger.warning("Skipping event without a session ID: %s", event.get("eventid"))
+            continue
+        sessions[session_id].append(event)
     return sessions
 
 
@@ -29,9 +32,20 @@ def summarize(session_events):
     """Turn one session's events into a single summary dict."""
     summary = {"src_ip": None, "logins": [], "commands": []}
     for event in session_events:
-        # TODO 2: fill src_ip, and append to logins / commands
-        # based on event["eventid"]
-        pass
+        if summary["src_ip"] is None:
+            summary["src_ip"] = event.get("src_ip")
+
+        eventid = event.get("eventid")
+        if eventid in ("cowrie.login.failed", "cowrie.login.success"):
+            summary["logins"].append(
+                {
+                    "username": event.get("username"),
+                    "password": event.get("password"),
+                    "success": eventid == "cowrie.login.success",
+                }
+            )
+        elif eventid == "cowrie.command.input":
+            summary["commands"].append(event.get("input"))
     return summary
 
 
