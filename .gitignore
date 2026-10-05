@@ -1,0 +1,26 @@
+# Secrets
+.env
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+cowrie-env/
+
+# Honeypot data (attacker IPs, malware samples)
+*.json.log
+var/
+downloads/
+tty/
+
+# Database and local data
+*.db
+*.sqlite3
+data/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
