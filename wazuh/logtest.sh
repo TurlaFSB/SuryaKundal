@@ -7,6 +7,6 @@ here="$(cd "$(dirname "$0")" && pwd)"
 while IFS= read -r line; do
   [ -z "$line" ] && continue
   echo "--- $(echo "$line" | cut -c1-110)"
-  printf '%s\n' "$line" | docker exec -i "$container" /var/ossec/bin/wazuh-logtest -q 2>&1 \
-    | grep -E "id:|level:|description:|id: 'T|ERROR|WARNING" || true
+  printf '%s\n' "$line" | docker exec -i "$container" /var/ossec/bin/wazuh-logtest 2>&1 \
+    | grep -E "^\s+(id|level|description|mitre\.id):|ERROR|WARNING" || true
 done < "$here/samples/cowrie_events.jsonl"
