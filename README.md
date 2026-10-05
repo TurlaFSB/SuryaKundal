@@ -97,6 +97,7 @@ surya-kundal list                 # recent sessions with country, abuse score an
 surya-kundal techniques           # techniques seen, most common first
 surya-kundal show <session-id>    # one session: commands with their techniques
 surya-kundal dashboard            # read-only web UI
+surya-kundal doctor               # check the installation; exit code 1 on failure
 surya-kundal wazuh-rules          # generate the Wazuh rules
 ```
 
@@ -137,7 +138,7 @@ Settings come from the environment or an untracked `.env` file. Every variable i
 
 ### Dashboard
 
-A small, server-rendered Flask application served by waitress. It is read-only by construction: the database connection is switched to `query_only`, and the app has no write routes. Everything an attacker typed is HTML-escaped and stripped of control and invisible characters, and the Content-Security-Policy forbids inline script, inline style and external resources. It listens on localhost unless you pass `--host`, and the command refuses a non-local host unless `DASHBOARD_TOKEN` is set (the token is then the HTTP Basic password).
+A small, server-rendered Flask application served by waitress. It is read-only by construction: the database is opened read-only (SQLite refuses every write and nothing is created at startup), and the app has no write routes. Everything an attacker typed is HTML-escaped and stripped of control and invisible characters, and the Content-Security-Policy forbids inline script, inline style and external resources. It listens on localhost unless you pass `--host`, and the command refuses a non-local host unless `DASHBOARD_TOKEN` (at least 12 characters) is set; the token is then the HTTP Basic password, with wrong guesses throttled per address. Without a token, requests for any host name other than localhost are refused, which blocks DNS-rebinding. The server is plain HTTP, so put it behind a TLS reverse proxy before exposing it. The overview is cached for 15 seconds, and very large sessions are truncated on screen.
 
 ### Wazuh
 
@@ -185,7 +186,7 @@ src/surya_kundal/
     cli.py         The surya-kundal command
 wazuh/             Generated rules, manager compose file, samples, logtest
 cowrie/            Deception kit and threat model
-docs/              Images used in this README
+docs/              Threat model and images used in this README
 tests/             Unit, property-based, migration, dashboard and CLI tests
 ```
 
@@ -209,7 +210,7 @@ tests/             Unit, property-based, migration, dashboard and CLI tests
 
 ## Security
 
-Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md). Operating notes:
+Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); the platform's own risks are analysed in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md). Operating notes:
 
 - Run the honeypot on an isolated host, never next to real services.
 - Restrict the honeypot host's outbound traffic: Cowrie performs real downloads when an attacker runs `wget`.
@@ -235,7 +236,7 @@ Only free tiers and free offline datasets are used; no paid service is required.
 
 ## Contributing
 
-Issues and pull requests are welcome. Before opening a pull request, run the same checks as CI:
+Issues and pull requests are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [`CHANGELOG`](CHANGELOG.md). Before opening a pull request, run the same checks as CI:
 
 ```bash
 pip install -e ".[dev]"

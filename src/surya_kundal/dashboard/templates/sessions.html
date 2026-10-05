@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Sessions - Surya Kundal{% endblock %}
-{% block count %}{{ result.total }}{% endblock %}
 {% block body %}
 <section class="panel">
   <h1>Sessions</h1>
   <form class="filters" method="get" action="{{ url_for('sessions') }}">
     <label>IP or session ID <input name="q" value="{{ args.get('q', '') | p }}" maxlength="64"></label>
     <label>Technique <input name="technique" value="{{ args.get('technique', '') | p }}" maxlength="16" placeholder="T1082"></label>
-    <label>Country <input name="country" value="{{ args.get('country', '') | p }}" maxlength="2" placeholder="US"></label>
+    <label>Country <input name="country" value="{{ args.get('country', '') | p }}" maxlength="7" placeholder="US"></label>
     <button type="submit">Filter</button>
   </form>
   <p class="muted">{{ result.total }} session{{ '' if result.total == 1 else 's' }}</p>

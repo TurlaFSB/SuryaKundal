@@ -20,19 +20,36 @@ def get_database_url() -> str:
     return os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
 
 
-def create_db_engine(url: str | None = None, *, echo: bool = False) -> Engine:
-    """Create an engine. For SQLite files, the parent directory is created if needed."""
+def create_db_engine(
+    url: str | None = None, *, echo: bool = False, read_only: bool = False
+) -> Engine:
+    """Create an engine. For SQLite files, the parent directory is created if needed.
+
+    ``read_only`` is for programs that only look at the data (the dashboard): nothing is
+    created, and SQLite refuses every write on every connection the engine opens.
+    """
     url = url or get_database_url()
     parsed = make_url(url)
     is_sqlite = parsed.get_backend_name() == "sqlite"
 
-    if is_sqlite and parsed.database not in (None, "", ":memory:"):
-        Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
+    on_disk = is_sqlite and parsed.database not in (None, "", ":memory:")
+    if on_disk and read_only:
+        if not Path(str(parsed.database)).is_file():
+            raise FileNotFoundError("database file not found")
+    elif on_disk:
+        Path(str(parsed.database)).parent.mkdir(parents=True, exist_ok=True)
 
     engine = create_engine(url, echo=echo)
     if is_sqlite:
-        event.listen(engine, "connect", _configure_sqlite)
+        event.listen(engine, "connect", _configure_read_only if read_only else _configure_sqlite)
     return engine
+
+
+def _configure_read_only(dbapi_connection: Any, _connection_record: Any) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA query_only=ON")
+    cursor.close()
 
 
 def _configure_sqlite(dbapi_connection: Any, _connection_record: Any) -> None:

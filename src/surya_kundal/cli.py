@@ -24,6 +24,7 @@ from surya_kundal.database.models import (
     Login,
     TechniqueMatch,
 )
+from surya_kundal.doctor import run_checks
 from surya_kundal.enrichment.enrich import DEFAULT_ABUSE_BUDGET, DEFAULT_VT_BUDGET
 from surya_kundal.enrichment.geoip import GeoIPLookup
 from surya_kundal.enrichment.geoip_update import GeoIPUpdateError, update_all
@@ -105,6 +106,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     wazuh = sub.add_parser("wazuh-rules", help="generate the Wazuh rules for Cowrie's log")
     wazuh.add_argument("--output", type=Path, default=None, help="write here instead of stdout")
+
+    doctor = sub.add_parser("doctor", help="check the installation (read-only; exit 1 on failure)")
+    _add_db_option(doctor)
+    _add_log_option(doctor)
 
     dash = sub.add_parser("dashboard", help="serve the read-only web dashboard")
     dash.add_argument("--host", default="127.0.0.1", help="address to listen on (default: local)")
@@ -189,33 +194,72 @@ def _run_geoip(args: argparse.Namespace, settings: Settings) -> int:
 # --- capture ---------------------------------------------------------------
 
 
+MIN_TOKEN_LENGTH = 12
+
+
+def _run_doctor(args: argparse.Namespace, settings: Settings) -> int:
+    checks = run_checks(settings, args.db, args.log)
+    for check in checks:
+        print(f"{check.status:<5} {check.name:<16} {printable(check.detail)}")
+    return 1 if any(c.status == "FAIL" for c in checks) else 0
+
+
 def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
     try:
         from waitress import serve
 
-        from surya_kundal.dashboard.app import create_app
-    except ImportError:
+        from surya_kundal.dashboard.app import create_app, readonly_session_factory
+    except ImportError as error:
+        if (error.name or "").split(".")[0] not in ("flask", "waitress"):
+            raise  # a real bug in our own code must not be reported as a missing extra
         print('error: the dashboard needs: pip install -e ".[dashboard]"', file=sys.stderr)
         return 2
+    token = settings.dashboard_token
     local = args.host in ("127.0.0.1", "localhost", "::1")
-    if not local and not settings.dashboard_token:
+    if not local and not token:
         print(
             "error: listening beyond localhost needs a password; set DASHBOARD_TOKEN in .env",
             file=sys.stderr,
         )
         return 2
-    # No migrations here: the dashboard only reads what the pipeline already wrote.
-    engine = create_db_engine(args.db or settings.database_url)
-    alerts = args.alerts or settings.wazuh_alerts_path
+    if token and len(token) < MIN_TOKEN_LENGTH:
+        print(
+            f"error: DASHBOARD_TOKEN must be at least {MIN_TOKEN_LENGTH} characters "
+            "(try: python3 -c 'import secrets; print(secrets.token_urlsafe(24))')",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        factory = readonly_session_factory(args.db or settings.database_url)
+    except FileNotFoundError:
+        print(
+            "error: the database does not exist yet; run `surya-kundal run` or `ingest` first",
+            file=sys.stderr,
+        )
+        return 2
     app = create_app(
-        make_session_factory(engine), alerts_path=alerts, token=settings.dashboard_token
+        factory,
+        alerts_path=args.alerts or settings.wazuh_alerts_path,
+        token=token,
+        allowed_hosts=(args.host,),
     )
-    where = f"http://{args.host}:{args.port}"
     print(
-        f"Dashboard on {where}"
-        + (" (password = DASHBOARD_TOKEN)" if settings.dashboard_token else "")
+        f"Dashboard on http://{args.host}:{args.port}"
+        + (" (password = DASHBOARD_TOKEN)" if token else "")
     )
-    serve(app, host=args.host, port=args.port, threads=4)
+    if not local:
+        print("warning: this is plain HTTP; put it behind TLS (a reverse proxy) before exposing it")
+    serve(
+        app,
+        host=args.host,
+        port=args.port,
+        threads=4,
+        # The app only answers GET: refuse bodies, and bound headers and idle connections.
+        max_request_body_size=1024,
+        max_request_header_size=16384,
+        connection_limit=100,
+        channel_timeout=30,
+    )
     return 0
 
 
@@ -459,6 +503,7 @@ def main(argv: list[str] | None = None) -> int:
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
         "dashboard": _run_dashboard,
+        "doctor": _run_doctor,
     }
     try:
         return handlers[args.action](args, settings)

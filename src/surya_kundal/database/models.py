@@ -304,6 +304,9 @@ class TechniqueMatch(Base):
     """
 
     __tablename__ = "technique_matches"
+    __table_args__ = (
+        Index("ix_technique_matches_technique_session", "technique_id", "session_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(

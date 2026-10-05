@@ -30,13 +30,14 @@
 </section>
 
 <section class="panel">
-  <h2>Commands <span class="pill">{{ d.commands | length }}</span></h2>
+  <h2>Commands <span class="pill">{{ d.command_total }}</span></h2>
   <ol class="cmds">
   {% for c in d.commands %}
     <li><code>{{ c.text | p }}</code>
       {% for m in c.matches %}<a class="tag" href="{{ url_for('sessions', technique=m.technique_id) }}" title="{{ m.rule_id | p }}">{{ m.technique_id | p }}</a> {% endfor %}</li>
   {% else %}<li class="muted">None.</li>{% endfor %}
   </ol>
+  {% if d.command_total > d.commands | length %}<p class="muted">Showing the first {{ d.commands | length }}.</p>{% endif %}
 </section>
 
 {% if d.files %}

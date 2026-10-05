@@ -5,13 +5,19 @@ Design choices that matter for a honeypot tool:
 * Everything shown was typed by an attacker, so it is escaped by Jinja and also passed
   through ``printable`` (no control or invisible characters reach the browser).
 * A strict Content-Security-Policy: no inline script or style, no external resources.
-* The database connection is switched to ``query_only``; this app cannot write.
-* Optional HTTP Basic password (the token); the CLI insists on one off-localhost.
+* The database is opened read-only (``readonly_session_factory``): SQLite itself refuses
+  every write, and nothing is created at startup.
+* Optional HTTP Basic password (the token), with a per-address failure throttle. Without
+  a token only local host names are accepted, which blocks DNS-rebinding attacks.
+* The overview is cached for a few seconds, so a burst of requests costs one set of
+  queries, not one per request.
 """
 
 from __future__ import annotations
 
 import hmac
+import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from surya_kundal.dashboard import queries
 from surya_kundal.dashboard.alerts import recent_alerts
+from surya_kundal.database.engine import create_db_engine, make_session_factory
 from surya_kundal.textsafe import printable
 
 CSP = (
@@ -30,6 +37,15 @@ CSP = (
     "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 MAP_W, MAP_H = 960, 480
+CACHE_SECONDS = 15.0
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+MAX_FAILURES = 5  # wrong passwords from one address ...
+FAILURE_WINDOW = 60.0  # ... within this many seconds are answered with 429
+
+
+def readonly_session_factory(url: str) -> sessionmaker[Session]:
+    """A session factory whose connections cannot write. Raises if the database is missing."""
+    return make_session_factory(create_db_engine(url, read_only=True))
 
 
 def project(longitude: float, latitude: float) -> tuple[float, float]:
@@ -54,10 +70,59 @@ def stamp(when: datetime | None) -> str:
     return "-" if when is None else when.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _authorised(token: str) -> bool:
-    auth = request.authorization
-    supplied = (auth.password or "") if auth else ""
-    return hmac.compare_digest(supplied.encode(), token.encode())
+def _hostname(host: str) -> str:
+    """The host part of a Host header, without port (handles bracketed IPv6)."""
+    host = host.strip().lower()
+    if host.startswith("["):
+        return host[1:].split("]", 1)[0]
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
+class _Throttle:
+    """Counts wrong passwords per client address; small, in memory, thread-safe."""
+
+    def __init__(self, clock: Callable[[], float]) -> None:
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._failures: dict[str, list[float]] = {}
+
+    def blocked(self, client: str) -> bool:
+        with self._lock:
+            return len(self._recent(client)) >= MAX_FAILURES
+
+    def record(self, client: str) -> None:
+        with self._lock:
+            if len(self._failures) > 10_000:  # a flood of addresses must not grow memory
+                self._failures.clear()
+            self._failures.setdefault(client, []).append(self._clock())
+
+    def _recent(self, client: str) -> list[float]:
+        cutoff = self._clock() - FAILURE_WINDOW
+        kept = [t for t in self._failures.get(client, []) if t >= cutoff]
+        if kept:
+            self._failures[client] = kept
+        else:
+            self._failures.pop(client, None)
+        return kept
+
+
+class _Cache:
+    """Keeps a computed value for a few seconds."""
+
+    def __init__(self, clock: Callable[[], float]) -> None:
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._items: dict[str, tuple[float, Any]] = {}
+
+    def get(self, key: str, build: Callable[[], Any]) -> Any:
+        with self._lock:
+            hit = self._items.get(key)
+            if hit and self._clock() - hit[0] < CACHE_SECONDS:
+                return hit[1]
+        value = build()
+        with self._lock:
+            self._items[key] = (self._clock(), value)
+        return value
 
 
 def create_app(
@@ -65,19 +130,22 @@ def create_app(
     *,
     alerts_path: Path | None = None,
     token: str = "",
+    allowed_hosts: tuple[str, ...] = (),
+    clock: Callable[[], float] = time.monotonic,
 ) -> Flask:
+    """Build the app. Pass a factory from ``readonly_session_factory`` for production."""
     app = Flask(__name__)
     app.jinja_env.filters["p"] = printable
     app.jinja_env.filters["ago"] = ago
     app.jinja_env.filters["stamp"] = stamp
     app.jinja_env.globals["project"] = project
+    throttle = _Throttle(clock)
+    cache = _Cache(clock)
+    hosts = LOCAL_HOSTS | {h.lower() for h in allowed_hosts}
 
     def db() -> Session:
         if "db" not in g:
-            session = session_factory()
-            if session.get_bind().dialect.name == "sqlite":
-                session.execute(text("PRAGMA query_only=ON"))
-            g.db = session
+            g.db = session_factory()
         return g.db  # type: ignore[no-any-return]
 
     app.extensions["surya_db"] = db
@@ -86,20 +154,28 @@ def create_app(
     def close_db(_: BaseException | None) -> None:
         session = g.pop("db", None)
         if session is not None:
-            if session.get_bind().dialect.name == "sqlite":
-                # the setting belongs to the pooled connection; do not leave it behind
-                session.rollback()
-                session.execute(text("PRAGMA query_only=OFF"))
             session.close()
 
     @app.before_request
-    def require_token() -> Response | None:
-        if token and request.endpoint not in ("healthz", "static") and not _authorised(token):
-            return Response(
-                "Authentication required",
-                401,
-                {"WWW-Authenticate": 'Basic realm="Surya Kundal", charset="UTF-8"'},
-            )
+    def guard() -> Response | None:
+        # Without a password, only local names are served: a web page the analyst visits
+        # could otherwise point its own domain at 127.0.0.1 and read this dashboard.
+        if not token and _hostname(request.host) not in hosts:
+            return Response("Unknown host", 421, mimetype="text/plain")
+        if token and request.endpoint not in ("healthz", "static"):
+            client = request.remote_addr or "?"
+            if throttle.blocked(client):
+                return Response("Too many attempts", 429, {"Retry-After": "60"})
+            auth = request.authorization
+            supplied = (auth.password or "") if auth else ""
+            if not hmac.compare_digest(supplied.encode(), token.encode()):
+                if auth is not None:
+                    throttle.record(client)
+                return Response(
+                    "Authentication required",
+                    401,
+                    {"WWW-Authenticate": 'Basic realm="Surya Kundal", charset="UTF-8"'},
+                )
         return None
 
     @app.after_request
@@ -110,6 +186,15 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return response
 
+    @app.context_processor
+    def global_state() -> dict[str, Any]:
+        """Every page carries the global session count, so the "new activity" banner is exact."""
+        try:
+            count = queries.pulse(db())[0] if queries.has_data(db()) else 0
+        except Exception:  # a page must still render if the count cannot be read
+            count = 0
+        return {"pulse_count": count}
+
     def page(template: str, build: Callable[[Session], dict[str, Any]]) -> str:
         """Render ``template`` with ``build(db)``; guide the user if nothing exists yet."""
         if not queries.has_data(db()):
@@ -118,23 +203,31 @@ def create_app(
 
     @app.get("/healthz")
     def healthz() -> Response:
+        try:
+            db().execute(text("SELECT 1"))
+        except Exception:
+            return Response("database unavailable", 503, mimetype="text/plain")
         return Response("ok", mimetype="text/plain")
 
     @app.get("/")
     def overview() -> str:
         def build(d: Session) -> dict[str, Any]:
-            return {
-                "totals": queries.totals(d),
-                "depth": queries.depth(d),
-                "points": queries.map_points(d),
-                "countries": queries.top_countries(d),
-                "hourly": queries.hourly_activity(d),
-                "techniques": queries.technique_counts(d, limit=8),
-                "probes": queries.probes(d),
-                "probing": queries.probing_sessions(d),
-                "alerts": recent_alerts(alerts_path),
-                "alerts_enabled": alerts_path is not None and alerts_path.exists(),
-            }
+            def compute() -> dict[str, Any]:
+                return {
+                    "totals": queries.totals(d),
+                    "depth": queries.depth(d),
+                    "points": queries.map_points(d),
+                    "countries": queries.top_countries(d),
+                    "hourly": queries.hourly_activity(d),
+                    "techniques": queries.technique_counts(d, limit=8),
+                    "probes": queries.probes(d),
+                    "probing": queries.probing_sessions(d),
+                }
+
+            data = dict(cache.get("overview", compute))
+            data["alerts"] = recent_alerts(alerts_path)
+            data["alerts_enabled"] = alerts_path is not None and alerts_path.exists()
+            return data
 
         return page("overview.html", build)
 
@@ -146,7 +239,7 @@ def create_app(
                 page=request.args.get("page", 1, type=int) or 1,
                 query=request.args.get("q", "").strip()[:64],
                 technique=request.args.get("technique", "").strip()[:16],
-                country=request.args.get("country", "").strip()[:2],
+                country=request.args.get("country", "").strip()[:7],
             )
             return {"result": result, "args": request.args}
 

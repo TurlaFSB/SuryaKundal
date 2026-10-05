@@ -20,6 +20,6 @@
 <div id="fresh" class="fresh" hidden>New activity. <a href="">Reload</a></div>
 <main>{% block body %}{% endblock %}</main>
 <footer>Everything shown on this page was sent by attackers. It is escaped, but do not paste it into a shell.</footer>
-<script src="{{ url_for('static', filename='app.js') }}" defer data-count="{% block count %}{% endblock %}"></script>
+<script src="{{ url_for('static', filename='app.js') }}" defer data-count="{{ pulse_count }}" data-pulse="{{ url_for('api_pulse') }}"></script>
 </body>
 </html>

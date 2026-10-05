@@ -14,7 +14,13 @@ from sample_events import SESSION_A, SESSION_A_EVENTS, SESSION_B_EVENTS, make_ev
 from surya_kundal.cli import main
 from surya_kundal.dashboard import queries
 from surya_kundal.dashboard.alerts import recent_alerts
-from surya_kundal.dashboard.app import ago, create_app, project, stamp
+from surya_kundal.dashboard.app import (
+    ago,
+    create_app,
+    project,
+    readonly_session_factory,
+    stamp,
+)
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
 from surya_kundal.database.models import HoneypotSession, IpGeo, IpIntel
 from surya_kundal.ingest import store_events
@@ -244,18 +250,24 @@ def test_attacker_text_is_escaped(factory):
     assert "\x1b" not in body and "‮" not in body and "\\x1b" in body
 
 
+def _url(factory):
+    return factory.kw["bind"].url.render_as_string(hide_password=False)
+
+
 def test_dashboard_cannot_write(factory):
-    app = create_app(factory)
-    with app.test_request_context("/healthz"):
-        request_db = app.extensions["surya_db"]()
+    read_only = readonly_session_factory(_url(factory))
+    with read_only() as db:
+        assert db.scalar(select(func.count()).select_from(HoneypotSession)) == 2
         with pytest.raises(OperationalError, match="readonly"):
-            request_db.execute(text("DELETE FROM sessions"))
-    # the setting does not leak into the shared pool: other users can still write
-    with factory() as other:
-        other.execute(text("DELETE FROM ip_intel"))
-        other.commit()
+            db.execute(text("DELETE FROM sessions"))
     with factory() as check:
         assert check.scalar(select(func.count()).select_from(HoneypotSession)) == 2
+
+
+def test_readonly_engine_creates_nothing(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        readonly_session_factory(f"sqlite:///{tmp_path / 'sub' / 'missing.db'}")
+    assert not (tmp_path / "sub").exists()
 
 
 def test_empty_database_shows_guidance(tmp_path):
@@ -284,6 +296,162 @@ def test_cli_serves_with_waitress(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(waitress, "serve", lambda app, **kw: served.update(kw))
     monkeypatch.setenv("DASHBOARD_TOKEN", "")
     monkeypatch.chdir(tmp_path)
-    assert main(["dashboard", "--db", f"sqlite:///{tmp_path / 'x.db'}", "--port", "9999"]) == 0
+    url = f"sqlite:///{tmp_path / 'x.db'}"
+    init_db(create_db_engine(url))
+    assert main(["dashboard", "--db", url, "--port", "9999"]) == 0
     assert served["host"] == "127.0.0.1" and served["port"] == 9999
+    assert served["max_request_body_size"] == 1024 and served["channel_timeout"] == 30
     assert "http://127.0.0.1:9999" in capsys.readouterr().out
+
+
+# --- audit fixes -----------------------------------------------------------
+
+
+def test_wrong_passwords_are_throttled_per_address(factory):
+    now = [0.0]
+    client = _client(factory, token="s3cret-token", clock=lambda: now[0])
+    for _ in range(5):
+        assert client.get("/", headers=_basic("wrong")).status_code == 401
+    blocked = client.get("/", headers=_basic("s3cret-token"))  # even the right one, for now
+    assert blocked.status_code == 429 and blocked.headers["Retry-After"] == "60"
+    now[0] = 61.0
+    assert client.get("/", headers=_basic("s3cret-token")).status_code == 200
+    # asking without credentials is not a failed guess (browsers do it first)
+    for _ in range(10):
+        assert client.get("/").status_code == 401
+    assert client.get("/", headers=_basic("s3cret-token")).status_code == 200
+
+
+def test_unknown_host_is_refused_without_a_token(factory):
+    client = _client(factory)
+    assert client.get("/healthz", headers={"Host": "evil.example"}).status_code == 421
+    assert client.get("/healthz", headers={"Host": "127.0.0.1:8080"}).status_code == 200
+    assert client.get("/healthz", headers={"Host": "[::1]:8080"}).status_code == 200
+    custom = _client(factory, allowed_hosts=("dash.lan",))
+    assert custom.get("/healthz", headers={"Host": "dash.lan:80"}).status_code == 200
+    # with a password the host does not matter: credentials are per origin
+    assert (
+        _client(factory, token="s3cret-token")
+        .get("/healthz", headers={"Host": "evil.example"})
+        .status_code
+        == 200
+    )
+
+
+def test_overview_is_cached_briefly(factory, monkeypatch):
+    now = [0.0]
+    calls = []
+    real = queries.totals
+    monkeypatch.setattr(queries, "totals", lambda d: calls.append(1) or real(d))
+    client = _client(factory, clock=lambda: now[0])
+    client.get("/")
+    client.get("/")
+    assert len(calls) == 1
+    now[0] = 16.0
+    client.get("/")
+    assert len(calls) == 2
+
+
+def test_healthz_reports_a_broken_database(factory):
+    app = create_app(factory)
+    import surya_kundal.dashboard.app as module
+
+    class Broken:
+        def execute(self, *a, **k):
+            raise RuntimeError("down")
+
+        def close(self):
+            pass
+
+    with app.test_client() as client:
+        app.extensions["surya_db"]  # exists
+        original = module.queries.has_data
+        module.queries.has_data = lambda d: False
+        try:
+            assert client.get("/healthz").status_code == 200
+        finally:
+            module.queries.has_data = original
+    bad = create_app(lambda: Broken())
+    assert bad.test_client().get("/healthz").status_code == 503
+
+
+def test_banner_count_is_global_on_every_page(factory):
+    client = _client(factory)
+    body = client.get("/sessions?technique=T9999").get_data(as_text=True)
+    assert 'data-count="2"' in body and "data-pulse=" in body
+
+
+def test_funnel_steps_are_nested(db):
+    from surya_kundal.database.models import HoneypotSession, TechniqueMatch
+
+    # a session that only guessed passwords must not count as having "taken action"
+    db.add(HoneypotSession(id="guesser-000001", src_ip="9.9.9.9", start_time=NOW))
+    db.flush()
+    db.add(
+        TechniqueMatch(
+            session_id="guesser-000001",
+            command_id=None,
+            technique_id="T1110.001",
+            tactics="credential-access",
+            rule_id="login-guessing",
+            confidence="high",
+            evidence="x",
+        )
+    )
+    db.commit()
+    d = queries.depth(db)
+    assert d.contact == 3
+    assert d.contact >= d.access >= d.hands_on >= d.action
+
+
+def test_unknown_country_filter_and_exact_session_match(db):
+    from surya_kundal.database.models import HoneypotSession
+
+    db.add(HoneypotSession(id="nogeo-0000001", src_ip="8.8.8.8", start_time=NOW))
+    db.add(HoneypotSession(id="nogeo-0000001-longer", src_ip=None, start_time=NOW))
+    db.commit()
+    unknown = queries.sessions_page(db, country="unknown")
+    assert {r.id for r in unknown.rows} == {"nogeo-0000001", "nogeo-0000001-longer"}
+    # the exact ID wins even though it is also a prefix of another session
+    assert queries.session_detail(db, "nogeo-0000001").session.id == "nogeo-0000001"
+    assert queries.session_detail(db, "nogeo") is None  # too short and not exact
+    assert queries.session_detail(db, "nogeo-00000") is None  # ambiguous prefix
+
+
+def test_session_page_is_bounded(factory):
+    from surya_kundal.database.models import Command, HoneypotSession, Login
+
+    with factory() as db:
+        db.add(HoneypotSession(id="busy-000000001", src_ip="7.7.7.7", start_time=NOW))
+        db.flush()
+        db.add_all(
+            Command(session_id="busy-000000001", command=f"c{i}", timestamp=NOW) for i in range(700)
+        )
+        db.add_all(
+            Login(
+                session_id="busy-000000001",
+                username="u",
+                password=str(i),
+                success=False,
+                timestamp=NOW,
+            )
+            for i in range(300)
+        )
+        db.commit()
+    with factory() as db:
+        detail = queries.session_detail(db, "busy-000000001")
+        assert detail.command_total == 700 and len(detail.commands) == 500
+        assert detail.login_total == 300 and len(detail.logins) == 100
+    body = _client(factory).get("/sessions/busy-000000001").get_data(as_text=True)
+    assert body.count("Showing the first") == 2
+
+
+def test_cli_rejects_a_short_token_and_a_missing_database(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DASHBOARD_TOKEN", "short")
+    assert main(["dashboard"]) == 2
+    assert "at least 12" in capsys.readouterr().err
+    monkeypatch.setenv("DASHBOARD_TOKEN", "")
+    assert main(["dashboard", "--db", f"sqlite:///{tmp_path / 'nope.db'}"]) == 2
+    assert "does not exist yet" in capsys.readouterr().err
+    assert not (tmp_path / "nope.db").exists()

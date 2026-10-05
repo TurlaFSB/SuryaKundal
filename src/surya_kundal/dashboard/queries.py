@@ -13,8 +13,9 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import distinct, exists, func, or_, select
+from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
@@ -65,6 +66,10 @@ TACTIC_ORDER = (
 )
 PAGE_SIZE = 25
 MAX_LOGINS_SHOWN = 100
+MAX_COMMANDS_SHOWN = 500
+MAX_FILES_SHOWN = 100
+MAX_MATCHES_LOADED = 5000
+MIN_PREFIX = 6  # a shorter prefix is not specific enough to name one session
 
 
 @dataclass(frozen=True)
@@ -165,6 +170,7 @@ class SessionDetail:
     logins: list[Login]
     login_total: int
     commands: list[CommandView]
+    command_total: int
     session_matches: list[TechniqueMatch]
     files: list[FileView]
     tunnels: list[TunnelRequest]
@@ -208,27 +214,39 @@ def totals(db: Session) -> Totals:
 
 
 def depth(db: Session) -> Depth:
-    def sessions_where(*conditions: object) -> int:
+    """How far sessions got. Each step is a subset of the one before it.
+
+    "Took action" means the visitor got in and then moved a file, opened a tunnel, or ran a
+    command that maps to a persistence, credential, command-and-control or similar technique.
+    Session-level evidence such as password guessing does not count: it needs no access.
+    """
+
+    def count(*conditions: object) -> int:
         query = select(func.count()).select_from(HoneypotSession)
         for condition in conditions:
             query = query.where(condition)  # type: ignore[arg-type]
         return int(db.scalar(query) or 0)
 
     sid = HoneypotSession.id
-    took_action = or_(
-        exists().where(Download.session_id == sid),
-        exists().where(Upload.session_id == sid),
-        exists().where(TunnelRequest.session_id == sid),
-        exists().where(
-            TechniqueMatch.session_id == sid,
-            or_(*(TechniqueMatch.tactics.contains(t, autoescape=True) for t in ACTION_TACTICS)),
-        ),
+    accepted = select(Login.session_id).where(Login.success.is_(True))
+    ran_command = select(Command.session_id)
+    acted = (
+        select(Download.session_id)
+        .union(
+            select(Upload.session_id),
+            select(TunnelRequest.session_id),
+            select(TechniqueMatch.session_id).where(
+                TechniqueMatch.command_id.is_not(None),
+                or_(*(TechniqueMatch.tactics.contains(t, autoescape=True) for t in ACTION_TACTICS)),
+            ),
+        )
+        .subquery()
     )
     return Depth(
-        contact=sessions_where(),
-        access=sessions_where(exists().where(Login.session_id == sid, Login.success.is_(True))),
-        hands_on=sessions_where(exists().where(Command.session_id == sid)),
-        action=sessions_where(took_action),
+        contact=count(),
+        access=count(sid.in_(accepted)),
+        hands_on=count(sid.in_(accepted), sid.in_(ran_command)),
+        action=count(sid.in_(accepted), sid.in_(select(acted.c.session_id))),
     )
 
 
@@ -274,9 +292,12 @@ def hourly_activity(db: Session, hours: int = 24, now: datetime | None = None) -
     top = now.replace(minute=0, second=0, microsecond=0)
     start = top - timedelta(hours=hours - 1)
     buckets = [0] * hours
-    for (when,) in db.execute(
-        select(HoneypotSession.start_time).where(HoneypotSession.start_time >= start).limit(50_000)
-    ):
+    rows = db.execute(
+        select(HoneypotSession.start_time)
+        .where(HoneypotSession.start_time >= start)
+        .execution_options(yield_per=5000)
+    )
+    for (when,) in rows:
         if when is not None:
             index = int((when - start).total_seconds() // 3600)
             if 0 <= index < hours:
@@ -330,12 +351,16 @@ def sessions_page(
             )
         )
     if technique:
+        # IN (subquery) lets SQLite use the technique index once, instead of per session.
         conditions.append(
-            exists().where(
-                TechniqueMatch.session_id == sid, TechniqueMatch.technique_id == technique
+            sid.in_(
+                select(TechniqueMatch.session_id).where(TechniqueMatch.technique_id == technique)
             )
         )
-    if country:
+    if country.lower() == "unknown":
+        located = select(IpGeo.ip).where(IpGeo.country_code.is_not(None))
+        conditions.append(HoneypotSession.src_ip.not_in(located) | HoneypotSession.src_ip.is_(None))
+    elif country:
         conditions.append(country_of.where(IpGeo.country_code == country.upper()).exists())
 
     total = int(
@@ -402,7 +427,7 @@ def technique_counts(db: Session, limit: int | None = None) -> list[TechniqueCou
             TechniqueCount(
                 technique_id=technique_id,
                 name=known.name if known else technique_id,
-                tactics=_tactics(tactics or ""),
+                tactics=known.tactics if known else _tactics(tactics or ""),
                 sessions=int(sessions),
                 hits=int(hits),
             )
@@ -450,33 +475,52 @@ def probing_sessions(db: Session) -> int:
 
 
 def session_detail(db: Session, prefix: str) -> SessionDetail | None:
-    """One session by full ID or unique prefix; None when there is not exactly one match."""
-    found = db.scalars(
-        select(HoneypotSession)
-        .where(HoneypotSession.id.startswith(prefix, autoescape=True))
-        .limit(2)
-    ).all()
-    if len(found) != 1:
-        return None
-    session = found[0]
+    """One session by exact ID, or by a unique prefix of at least six characters."""
+    session = db.get(HoneypotSession, prefix)
+    if session is None:
+        if len(prefix) < MIN_PREFIX:
+            return None
+        found = db.scalars(
+            select(HoneypotSession)
+            .where(HoneypotSession.id.startswith(prefix, autoescape=True))
+            .limit(2)
+        ).all()
+        if len(found) != 1:
+            return None
+        session = found[0]
+    sid = session.id
+
+    def limited(model: Any, order: tuple[Any, ...], cap: int) -> list[Any]:
+        return list(
+            db.scalars(select(model).where(model.session_id == sid).order_by(*order).limit(cap))
+        )
+
+    def total(model: Any) -> int:
+        count = select(func.count()).select_from(model).where(model.session_id == sid)
+        return int(db.scalar(count) or 0)
+
+    logins = limited(Login, (Login.timestamp, Login.id), MAX_LOGINS_SHOWN)
+    commands = limited(Command, (Command.timestamp, Command.id), MAX_COMMANDS_SHOWN)
+    downloads = limited(Download, (Download.timestamp, Download.id), MAX_FILES_SHOWN)
+    uploads = limited(Upload, (Upload.timestamp, Upload.id), MAX_FILES_SHOWN)
+    tunnels = limited(TunnelRequest, (TunnelRequest.timestamp, TunnelRequest.id), MAX_FILES_SHOWN)
+
     matches = db.scalars(
         select(TechniqueMatch)
-        .where(TechniqueMatch.session_id == session.id)
+        .where(TechniqueMatch.session_id == sid)
         .order_by(TechniqueMatch.id)
+        .limit(MAX_MATCHES_LOADED)
     ).all()
     by_command: defaultdict[int | None, list[TechniqueMatch]] = defaultdict(list)
     for match in matches:
         by_command[match.command_id].append(match)
 
+    hashes = [d.sha256 for d in downloads if d.sha256] + [u.sha256 for u in uploads if u.sha256]
     verdicts = {
         row.sha256: row
         for row in db.scalars(
             select(FileIntel).where(
-                FileIntel.provider == "virustotal",
-                FileIntel.sha256.in_(
-                    [d.sha256 for d in session.downloads if d.sha256]
-                    + [u.sha256 for u in session.uploads if u.sha256]
-                ),
+                FileIntel.provider == "virustotal", FileIntel.sha256.in_(hashes)
             )
         )
     }
@@ -494,25 +538,24 @@ def session_detail(db: Session, prefix: str) -> SessionDetail | None:
             known=verdict.found if verdict else None,
         )
 
-    files = [view("downloaded", d.url, d.sha256, d.timestamp) for d in session.downloads]
-    files += [view("uploaded", u.filename, u.sha256, u.timestamp) for u in session.uploads]
+    files = [view("downloaded", d.url, d.sha256, d.timestamp) for d in downloads]
+    files += [view("uploaded", u.filename, u.sha256, u.timestamp) for u in uploads]
     geo = db.get(IpGeo, session.src_ip) if session.src_ip else None
     intel = {
         row.provider: row for row in db.scalars(select(IpIntel).where(IpIntel.ip == session.src_ip))
     }
-    login_total = len(session.logins)
     return SessionDetail(
         session=session,
         geo=geo,
         abuse=intel["abuseipdb"].score if "abuseipdb" in intel else None,
         tor=intel["tor"].flagged if "tor" in intel else None,
-        logins=list(session.logins[:MAX_LOGINS_SHOWN]),
-        login_total=login_total,
+        logins=logins,
+        login_total=total(Login),
         commands=[
-            CommandView(c.id, c.command, c.timestamp, by_command.get(c.id, []))
-            for c in session.commands
+            CommandView(c.id, c.command, c.timestamp, by_command.get(c.id, [])) for c in commands
         ],
+        command_total=total(Command),
         session_matches=by_command.get(None, []),
         files=files,
-        tunnels=list(session.tunnels),
+        tunnels=tunnels,
     )
