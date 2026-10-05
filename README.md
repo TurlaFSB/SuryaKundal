@@ -21,7 +21,7 @@ A honeypot's native output is a flat stream of events: one JSON line per connect
 | `surya-kundal ingest` / `watch` / `list` / `enrich` / `geoip` command-line tools | Working |
 | Offline IP geolocation and ASN lookup (MaxMind GeoLite2) with a safe, validated database updater: `surya-kundal geoip update` / `geoip lookup` | Working |
 | Threat-intelligence enrichment: AbuseIPDB score per attacker IP, Tor exit-node check, VirusTotal verdict per downloaded file. Each IP and hash is looked up once and cached; daily budgets stay under free-tier limits and survive restarts. `surya-kundal enrich` | Working (live API check pending) |
-| MITRE ATT&CK technique mapping of attacker commands | Planned |
+| MITRE ATT&CK technique mapping of attacker commands and logins: 70+ reviewable rules, each with its own pass/fail examples, validated against the official ATT&CK catalog. `surya-kundal map` / `techniques` / `show` | Working |
 | Wazuh SIEM rules for high-risk behaviour | Planned |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
 | One-command deployment with Docker Compose | Planned |
@@ -60,6 +60,8 @@ Everything from the log parser onward is code in this repository. Cowrie itself 
 | `ip_geo` | attacker IP | country, city, coordinates, ASN and organisation |
 | `ip_intel` | IP per provider | AbuseIPDB confidence score, Tor exit flag, raw provider payload |
 | `file_intel` | file hash per provider | VirusTotal detections, engine count, threat label |
+| `technique_matches` | rule that fired | ATT&CK technique and tactics, rule ID, confidence, the evidence text, linked to the command |
+| `session_mappings` | mapped session | which rule set and ATT&CK version produced the matches |
 
 ## Engineering approach
 
@@ -114,7 +116,7 @@ The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_k
 | 1 | Cowrie running, log parser | Done |
 | 2 | Database layer and live log watcher | Done |
 | 3 | Threat-intel enrichment with caching and rate limits | Built; live API verification in progress |
-| 4 | MITRE ATT&CK mapping engine | Planned |
+| 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh custom rules | Planned |
 | 6 | Flask dashboard | Planned |
 | 7 | Docker Compose for the whole stack | Planned |
@@ -130,7 +132,7 @@ src/surya_kundal/
     parser/        Cowrie log parsing
     database/      SQLAlchemy models, engine setup, storage
     enrichment/    GeoIP, AbuseIPDB, VirusTotal, Tor list, enrichment pass
-    mapping/       ATT&CK mapping engine (Phase 4)
+    mapping/       ATT&CK catalog, rules.toml, mapping engine
     dashboard/     Flask web UI (Phase 6)
     ingest.py      Log import orchestration
     cli.py         surya-kundal command
@@ -146,6 +148,14 @@ pyproject.toml     Packaging, dependencies, ruff and pytest config
 ## Third-party data
 
 This product includes GeoLite2 data created by MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com). Run `surya-kundal geoip update` with a free MaxMind account (set `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` in `.env`). The databases are git-ignored and must not be redistributed; GeoLite2 city-level locations are approximate.
+
+## ATT&CK mapping
+
+Attacker commands are split into simple commands (respecting quotes), stripped of wrappers like `sudo` and `/usr/bin/`, and matched against the rules in [`rules.toml`](src/surya_kundal/mapping/rules.toml). Session-level evidence such as repeated failed logins maps to password guessing. Every rule states its technique, a confidence level, and examples that must and must not match; the test suite enforces all of them, and every technique ID is checked against the vendored ATT&CK Enterprise catalog (v19). Sessions are re-mapped automatically when their commands or the rules change.
+
+This is pattern matching, not a shell interpreter: it does not follow variables or decode payloads, and confidence describes how specific a pattern is, not how dangerous a command is.
+
+MITRE ATT&CK(R) is a registered trademark of The MITRE Corporation. Technique data is from the Enterprise ATT&CK dataset, (c) The MITRE Corporation, reproduced with permission.
 
 ## Security notes
 

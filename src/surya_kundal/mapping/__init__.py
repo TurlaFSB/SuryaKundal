@@ -1,1 +1,1 @@
-"""MITRE ATT&CK mapping: attacker commands -> technique IDs (Phase 4)."""
+"""MITRE ATT&CK mapping: turns attacker commands and logins into technique IDs."""

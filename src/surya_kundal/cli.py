@@ -1,4 +1,4 @@
-"""Command-line entry point: ``surya-kundal ingest | watch | list | geoip | enrich``."""
+"""Command-line entry point: the ``surya-kundal`` command and its subcommands."""
 
 from __future__ import annotations
 
@@ -14,7 +14,14 @@ from dotenv import load_dotenv
 from sqlalchemy import func, select
 
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
-from surya_kundal.database.models import Command, HoneypotSession, IpGeo, IpIntel, Login
+from surya_kundal.database.models import (
+    Command,
+    HoneypotSession,
+    IpGeo,
+    IpIntel,
+    Login,
+    TechniqueMatch,
+)
 from surya_kundal.enrichment.abuseipdb import AbuseIPDBClient
 from surya_kundal.enrichment.enrich import (
     DEFAULT_ABUSE_BUDGET,
@@ -27,6 +34,8 @@ from surya_kundal.enrichment.http import ProviderError
 from surya_kundal.enrichment.tor import TorExitList
 from surya_kundal.enrichment.virustotal import VirusTotalClient
 from surya_kundal.ingest import ingest_log
+from surya_kundal.mapping.attack import load_catalog
+from surya_kundal.mapping.store import map_pending
 from surya_kundal.watcher import Watcher
 
 DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
@@ -77,6 +86,17 @@ def _build_parser() -> argparse.ArgumentParser:
     enrich.add_argument(
         "--vt-budget", type=int, default=DEFAULT_VT_BUDGET, help="max VirusTotal lookups/day"
     )
+
+    mapping = sub.add_parser("map", help="map stored sessions to MITRE ATT&CK techniques")
+    mapping.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
+
+    techniques = sub.add_parser("techniques", help="show ATT&CK techniques seen, most common first")
+    techniques.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
+    techniques.add_argument("--limit", type=int, default=30, help="maximum rows to show")
+
+    show = sub.add_parser("show", help="show one session's commands with their techniques")
+    show.add_argument("session_id", help="session ID, or a unique prefix of it")
+    show.add_argument("--db", default=None, help="database URL (default: $DATABASE_URL)")
 
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
@@ -169,6 +189,85 @@ def _run_enrich(args: argparse.Namespace) -> int:
     for provider in result.stopped:
         print(f"note: {provider} limit reached; remaining items wait for the next run")
     return 1 if result.errors else 0
+
+
+def _run_map(args: argparse.Namespace) -> int:
+    engine = create_db_engine(args.db)
+    init_db(engine)
+    with make_session_factory(engine)() as db:
+        result = map_pending(db)
+    print(
+        f"Mapped {result.sessions} session(s): {result.matches} technique match(es); "
+        f"{result.failed} failed."
+    )
+    return 1 if result.failed else 0
+
+
+def _run_techniques(args: argparse.Namespace) -> int:
+    engine = create_db_engine(args.db)
+    init_db(engine)
+    sessions_seen = func.count(TechniqueMatch.session_id.distinct())
+    query = (
+        select(TechniqueMatch.technique_id, sessions_seen, func.count())
+        .group_by(TechniqueMatch.technique_id)
+        .order_by(
+            func.count(TechniqueMatch.session_id.distinct()).desc(), TechniqueMatch.technique_id
+        )
+        .limit(args.limit)
+    )
+    with make_session_factory(engine)() as db:
+        rows = db.execute(query).all()
+    if not rows:
+        print("No technique matches yet. Run: surya-kundal map")
+        return 0
+
+    catalog = load_catalog()
+    print(f"{'TECHNIQUE':<11}{'NAME':<44}{'TACTICS':<30}{'SESSIONS':>9}{'HITS':>6}")
+    for technique_id, sessions, hits in rows:
+        technique = catalog.get(technique_id)
+        name = technique.name if technique else "?"
+        tactics = ",".join(technique.tactics) if technique else "?"
+        print(f"{technique_id:<11}{name[:42]:<44}{tactics[:28]:<30}{sessions:>9}{hits:>6}")
+    print(f"\nMITRE ATT&CK Enterprise v{catalog.version}")
+    return 0
+
+
+def _run_show(args: argparse.Namespace) -> int:
+    engine = create_db_engine(args.db)
+    init_db(engine)
+    with make_session_factory(engine)() as db:
+        found = db.scalars(
+            select(HoneypotSession).where(HoneypotSession.id.startswith(args.session_id))
+        ).all()
+        if len(found) != 1:
+            reason = "no session" if not found else "more than one session"
+            print(f"error: {reason} matches {args.session_id!r}", file=sys.stderr)
+            return 2
+        session = found[0]
+        matches = db.scalars(
+            select(TechniqueMatch).where(TechniqueMatch.session_id == session.id)
+        ).all()
+        by_command: dict[int | None, list[TechniqueMatch]] = {}
+        for match in matches:
+            by_command.setdefault(match.command_id, []).append(match)
+
+        start = session.start_time.strftime("%Y-%m-%d %H:%M:%S") if session.start_time else "-"
+        print(f"Session {session.id} from {session.src_ip or '-'} at {start} UTC")
+        print(f"Client: {session.client_version or '-'}   HASSH: {session.hassh or '-'}")
+        for login in session.logins:
+            outcome = "accepted" if login.success else "rejected"
+            print(f"  login {outcome}: {login.username}/{login.password}")
+        for match in by_command.get(None, []):
+            print(
+                f"  [{match.technique_id}] {match.rule_id} ({match.confidence}): {match.evidence}"
+            )
+        for command in session.commands:
+            print(f"  $ {command.command}")
+            for match in by_command.get(command.id, []):
+                print(f"      -> {match.technique_id} {match.rule_id} ({match.confidence})")
+        for download in session.downloads:
+            print(f"  downloaded {download.url} sha256={download.sha256}")
+    return 0
 
 
 def _run_watch(args: argparse.Namespace) -> int:
@@ -272,6 +371,9 @@ def main(argv: list[str] | None = None) -> int:
         "list": _run_list,
         "geoip": _run_geoip,
         "enrich": _run_enrich,
+        "map": _run_map,
+        "techniques": _run_techniques,
+        "show": _run_show,
     }
     return handlers[args.action](args)
 

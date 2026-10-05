@@ -54,6 +54,8 @@ def test_init_db_creates_expected_tables(engine):
         "ip_geo",
         "ip_intel",
         "file_intel",
+        "session_mappings",
+        "technique_matches",
     }
 
 

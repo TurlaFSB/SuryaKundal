@@ -211,3 +211,43 @@ class FileIntel(Base):
     engines: Mapped[int | None] = mapped_column(Integer)
     label: Mapped[str | None] = mapped_column(String(255))
     payload: Mapped[dict | None] = mapped_column(JSON)
+
+
+class SessionMapping(Base):
+    """Records that a session was mapped to ATT&CK, and from what.
+
+    A session is mapped again when its commands or logins change, or when the rule
+    set changes, so the matches below are always derived from current data.
+    """
+
+    __tablename__ = "session_mappings"
+
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    ruleset_version: Mapped[str] = mapped_column(String(16))
+    attack_version: Mapped[str] = mapped_column(String(16))
+    command_count: Mapped[int] = mapped_column(Integer)
+    login_count: Mapped[int] = mapped_column(Integer)
+    mapped_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class TechniqueMatch(Base):
+    """One rule firing: a technique seen in a session, usually tied to one command.
+
+    ``command_id`` is empty for session-level evidence such as password guessing.
+    These rows are derived data and are rebuilt whenever a session is re-mapped.
+    """
+
+    __tablename__ = "technique_matches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    command_id: Mapped[int | None] = mapped_column(ForeignKey("commands.id", ondelete="CASCADE"))
+    technique_id: Mapped[str] = mapped_column(String(12), index=True)
+    tactics: Mapped[str] = mapped_column(String(255))  # comma-separated, e.g. "stealth,persistence"
+    rule_id: Mapped[str] = mapped_column(String(64))
+    confidence: Mapped[str] = mapped_column(String(8))
+    evidence: Mapped[str] = mapped_column(String(300))
