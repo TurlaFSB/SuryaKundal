@@ -9,6 +9,7 @@ reports its limit stops being called for the rest of the run.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -27,11 +28,12 @@ from surya_kundal.database.models import (
 from surya_kundal.enrichment import abuseipdb, virustotal
 from surya_kundal.enrichment.abuseipdb import AbuseIPDBClient
 from surya_kundal.enrichment.geoip import GeoIPLookup, is_public_ip
-from surya_kundal.enrichment.http import ProviderError, QuotaExceeded
+from surya_kundal.enrichment.http import FatalProviderError, ProviderError
 from surya_kundal.enrichment.tor import TorExitList
 from surya_kundal.enrichment.virustotal import VirusTotalClient
 
 logger = logging.getLogger(__name__)
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 # Conservative budgets below the free-tier limits (1000 and 500 per UTC day).
 DEFAULT_ABUSE_BUDGET = 900
@@ -150,7 +152,7 @@ def _enrich_abuse(
             break
         try:
             data = client.check(ip)
-        except QuotaExceeded as exc:
+        except FatalProviderError as exc:
             logger.warning("%s; stopping AbuseIPDB for this run", exc)
             result.stopped.append(abuseipdb.PROVIDER)
             break
@@ -192,7 +194,7 @@ def _enrich_files(
         for sha in db.scalars(
             select(seen.c.sha256).group_by(seen.c.sha256).order_by(func.max(seen.c.at).desc())
         )
-        if sha
+        if sha and _SHA256.fullmatch(sha)  # a malformed hash must not use up a budget slot
     ]
     rows = {
         r.sha256: r for r in db.scalars(select(FileIntel).where(FileIntel.provider == "virustotal"))
@@ -205,7 +207,7 @@ def _enrich_files(
             break
         try:
             report = client.lookup_file(sha)
-        except QuotaExceeded as exc:
+        except FatalProviderError as exc:
             logger.warning("%s; stopping VirusTotal for this run", exc)
             result.stopped.append(virustotal.PROVIDER)
             break

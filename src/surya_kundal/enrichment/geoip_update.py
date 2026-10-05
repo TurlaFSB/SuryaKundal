@@ -165,7 +165,18 @@ def update_all(
     force: bool = False,
     client: httpx.Client | None = None,
 ) -> list[UpdateResult]:
-    return [
-        update_database(e, db_dir, account_id, license_key, force=force, client=client)
-        for e in EDITIONS
-    ]
+    results: list[UpdateResult] = []
+    errors: list[str] = []
+    for edition in EDITIONS:  # one failing edition must not stop the other
+        try:
+            results.append(
+                update_database(
+                    edition, db_dir, account_id, license_key, force=force, client=client
+                )
+            )
+        except GeoIPUpdateError as exc:
+            errors.append(f"{edition}: {exc}")
+    if errors:
+        done = ", ".join(r.edition for r in results) or "none"
+        raise GeoIPUpdateError(f"{'; '.join(errors)} (updated: {done})")
+    return results

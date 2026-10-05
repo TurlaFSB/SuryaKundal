@@ -8,7 +8,8 @@ Wazuh's built-in JSON decoder reads Cowrie's log, so only **rules** are needed. 
 | `docker-compose.yml` | Wazuh manager only (about 1 GB RAM), with the rules mounted |
 | `agent-localfile.xml` | Snippet that points a Wazuh agent at `cowrie.json` |
 | `samples/cowrie_events.jsonl` | Sample events for `logtest.sh` |
-| `logtest.sh` | Shows which rule fires for each sample event on a real manager |
+| `samples/expected.txt` | What each sample event must trigger |
+| `logtest.sh` | Runs every sample through a real manager and prints PASS/FAIL (CI checks the same expectations with a small simulator) |
 
 Regenerate after editing `rules.toml` (CI fails if the committed file is stale):
 
@@ -22,9 +23,11 @@ Regenerate after editing `rules.toml` (CI fails if the committed file is stale):
 | 8 / 10 | Login succeeded / with a default account such as root | T1078 / T1078.001 |
 | 10 | File downloaded or uploaded | T1105 |
 | 9 | Port-forwarding request | T1090 |
-| 4-10 | Each command rule (low/medium/high confidence) | per rule |
+| 8 | 4+ discovery commands from one IP in 60 s (rapid reconnaissance) | T1082 |
+| 10 | Honeypot-fingerprinting probes (`dmesg`, `/proc/1/cgroup`, `/.dockerenv`, DMI/hypervisor files, `grep hypervisor`) | T1497 |
+| 4-10 | Each other command rule; plain discovery commands are capped at level 6 so `uptime` is not a severe alert | per rule |
 
-Differences from the Python mapping, stated plainly: Wazuh cannot split a command line, so a leading `^` is widened to also match after `;`, `&&`, `|` and `sudo`; and Wazuh raises only the first matching rule per event, so high-confidence rules come first.
+Differences from the Python mapping, stated plainly: Wazuh cannot split a command line, so a leading `^` is widened to also match after `;`, `&&`, `|` and `sudo`; and Wazuh raises only the first matching rule per event, so the most severe rules come first. It also cannot look inside `bash -c '...'` or quoted text; the Python mapping can, so the database is the more complete record.
 
 ## Setting it up
 
@@ -32,7 +35,7 @@ The unit tests check the rules offline. `logtest.sh` is the real check; it was v
 
 1. Start the manager: `cd wazuh && docker compose up -d`
 2. Check the rules load: `docker logs surya-wazuh-manager 2>&1 | grep -i -E "error|critical" | head`
-3. Run `./logtest.sh` and compare with the table above.
+3. Run `./logtest.sh`. Every line should say PASS and the last line `14/14 passed`.
 4. Point the agent at the manager: set `<address>127.0.0.1</address>` in `/var/ossec/etc/ossec.conf`, add `agent-localfile.xml`, then `sudo /var/ossec/bin/agent-auth -m 127.0.0.1` and `sudo systemctl enable --now wazuh-agent`.
 5. Alerts appear in `docker exec surya-wazuh-manager tail -f /var/ossec/logs/alerts/alerts.json`.
 

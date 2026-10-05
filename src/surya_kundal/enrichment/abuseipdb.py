@@ -7,7 +7,13 @@ from collections.abc import Callable
 
 import httpx
 
-from surya_kundal.enrichment.http import DEFAULT_TIMEOUT, ProviderError, QuotaExceeded, send
+from surya_kundal.enrichment.http import (
+    DEFAULT_TIMEOUT,
+    AuthError,
+    ProviderError,
+    QuotaExceeded,
+    send,
+)
 
 CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
 PROVIDER = "abuseipdb"
@@ -43,7 +49,7 @@ class AbuseIPDBClient:
         if status == 429:
             raise QuotaExceeded("AbuseIPDB limit reached (429)")
         if status in (401, 403):
-            raise ProviderError("AbuseIPDB rejected the API key")
+            raise AuthError("AbuseIPDB rejected the API key")
         if status == 422:
             raise ProviderError(f"AbuseIPDB rejected the address {ip!r}")
         if status != 200:

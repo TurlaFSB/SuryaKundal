@@ -355,7 +355,9 @@ def _run_techniques(args: argparse.Namespace, settings: Settings) -> int:
 def _run_show(args: argparse.Namespace, settings: Settings) -> int:
     with _open_database(args, settings)() as db:
         found = db.scalars(
-            select(HoneypotSession).where(HoneypotSession.id.startswith(args.session_id))
+            select(HoneypotSession).where(
+                HoneypotSession.id.startswith(args.session_id, autoescape=True)
+            )
         ).all()
         if len(found) != 1:
             reason = "no session" if not found else "more than one session"

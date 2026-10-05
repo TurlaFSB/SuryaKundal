@@ -31,12 +31,13 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 | SSH honeypot capture (Cowrie) | Working |
 | Session reconstruction: credentials, commands, files downloaded and uploaded (SHA-256), port-forwarding attempts, timing, SSH client version, HASSH fingerprint | Working |
 | Durable SQLite storage with idempotent, failure-isolated import and versioned schema migrations (Alembic) | Working |
-| Live log following across rotation; failed database writes are retried, never dropped | Working |
+| Live log following across rotation and restarts (the read position is saved); a session that fails to store is retried a few times, then logged and skipped so it cannot block the rest | Working |
 | Offline IP geolocation and ASN (MaxMind GeoLite2) with a validated, atomic database updater | Working |
 | Threat-intel enrichment: AbuseIPDB score and Tor exit-node check per IP, VirusTotal verdict per captured file. Each IP and hash is looked up once; daily budgets stay under free-tier limits and survive restarts | Working |
 | MITRE ATT&CK mapping of commands, logins, transfers and tunnelling: 70+ reviewable rules, each with its own pass/fail examples, validated against the official ATT&CK catalog | Working |
 | One-process service (`surya-kundal run`): capture, ATT&CK mapping, background enrichment | Working |
-| Wazuh rules for Cowrie events, generated from the ATT&CK rules (see `wazuh/`) | Done, verified on Wazuh 4.14.7 |
+| Wazuh rules for Cowrie events, generated from the ATT&CK rules, including honeypot-fingerprinting and rapid-recon alerts (see `wazuh/`) | Done, verified on Wazuh 4.14.7 |
+| Deception kit: hardened Cowrie config, believable fake filesystem and login policy, with an honest threat model of what still gives a honeypot away (see `cowrie/`) | Working |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
 | One-command deployment with Docker Compose | Planned |
 | Public deployment and real-world data collection | Planned |
@@ -62,7 +63,7 @@ Internet / attacker
    +----------+-----------+
    |                      |
 [Wazuh rules]      [Flask dashboard]
-   (planned)           (planned)
+   (done)              (planned)
 ```
 
 Everything from the log parser onward is code in this repository. Cowrie itself is used unmodified as the capture engine.
@@ -91,14 +92,14 @@ This is pattern matching, not a shell interpreter: it does not follow variables 
 
 ## Engineering approach
 
-- **Additive, idempotent storage.** Sessions are merged into the database, never rewritten. Importing the same log twice creates no duplicates, a session saved mid-attack is completed when its closing events arrive, and row IDs stay stable. Event identity is enforced by unique constraints in the database itself.
+- **Additive, idempotent storage.** Sessions are merged into the database, never rewritten. Importing the same log twice creates no duplicates, a session saved mid-attack is completed when its closing events arrive, and row IDs stay stable. Event identity is enforced by the merge logic and by unique constraints in the database.
 - **Migrations.** The schema is versioned with Alembic. Databases from before migrations existed upgrade in place, and a test fails if a model changes without a migration.
 - **A watcher built for real log files.** It copes with rotation (including a session split across two files), truncation, a half-written last line, and a missing log. It retries failed database writes and shuts down cleanly on `SIGINT`/`SIGTERM`.
 - **Treats attacker input as hostile.** Everything an attacker types is untrusted. Output is escaped before it reaches a terminal (control characters and right-to-left overrides), and the mapper bounds the length of every command it analyses so crafted input cannot cause pathological regular-expression run time. Property-based tests (Hypothesis) throw arbitrary text, JSON and control characters at the parser, mapper and sanitiser.
 - **Free-tier discipline.** Every IP and file hash is looked up once and cached. Daily budgets are tracked in the database, so they survive restarts. A provider that reports its limit stops being called, and a failure on one item never blocks the rest.
 - **Secrets.** Read only from the environment or an untracked `.env` (which triggers a warning if other users can read it). HTTP clients never log request URLs, and the MaxMind downloader does not forward credentials across redirects.
 - **Correct time handling and database integrity.** Timestamps are timezone-aware UTC end to end; foreign keys are enforced and WAL mode lets a reader work while the importer writes.
-- **Quality gates in CI.** Every push runs the test suite on Python 3.11, 3.13 and 3.14 (95% coverage, 90% floor, resource leaks fail the run), ruff lint and format with security rules, strict mypy, a job that builds the wheel and runs it from a clean environment, `pip-audit`, and CodeQL. Dependabot keeps dependencies current.
+- **Quality gates in CI.** Every push runs the test suite on Python 3.11, 3.13 and 3.14 (90% coverage floor, currently about 95%; resource leaks fail the run), ruff lint and format with security rules, strict mypy, a job that builds the wheel and runs it from a clean environment, `pip-audit`, and CodeQL. Dependabot keeps dependencies current.
 
 ## Getting started
 
@@ -130,7 +131,7 @@ Or use the pieces separately:
 
 ```bash
 surya-kundal ingest                # import an existing Cowrie log
-surya-kundal watch --from-end      # follow the log live, store only new events
+surya-kundal watch                 # follow the log live; resumes where it stopped
 surya-kundal map                   # map sessions to ATT&CK techniques
 surya-kundal enrich                # geolocation + threat intel
 surya-kundal list                  # recent sessions with country, abuse score, Tor flag

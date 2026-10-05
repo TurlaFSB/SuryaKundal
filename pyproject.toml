@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,6 +9,14 @@ description = "SSH honeypot platform: Cowrie sessions, threat-intel enrichment, 
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+
 requires-python = ">=3.11"
 dependencies = [
     "sqlalchemy>=2.0",
@@ -17,6 +25,10 @@ dependencies = [
     "maxminddb>=2.6",
     "python-dotenv>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/TurlaFSB/SuryaKundal"
+Issues = "https://github.com/TurlaFSB/SuryaKundal/issues"
 
 [project.scripts]
 surya-kundal = "surya_kundal.cli:main"
@@ -37,6 +49,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
+"surya_kundal" = ["py.typed"]
 "surya_kundal.mapping" = ["rules.toml", "data/*.json"]
 "surya_kundal.database" = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
 

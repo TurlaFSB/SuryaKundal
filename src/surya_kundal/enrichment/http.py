@@ -18,8 +18,16 @@ class ProviderError(Exception):
     """A provider call failed. Messages never contain credentials or request URLs."""
 
 
-class QuotaExceeded(ProviderError):
+class FatalProviderError(ProviderError):
+    """Further calls in this run would fail the same way, so stop calling the provider."""
+
+
+class QuotaExceeded(FatalProviderError):
     """The provider's rate or daily limit was hit; stop calling it for now."""
+
+
+class AuthError(FatalProviderError):
+    """The provider rejected the API key; retrying every item would waste time and quota."""
 
 
 def send(
@@ -40,7 +48,7 @@ def send(
         last = attempt == retries
         try:
             response = client.request(method, url, **kwargs)
-        except httpx.TransportError as exc:
+        except (httpx.TransportError, httpx.DecodingError) as exc:
             if last:
                 raise ProviderError(f"network error: {type(exc).__name__}") from exc
         else:

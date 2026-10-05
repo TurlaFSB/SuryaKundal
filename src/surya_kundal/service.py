@@ -16,10 +16,12 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from surya_kundal.mapping.store import map_pending
-from surya_kundal.pipeline import Providers, run_enrichment
+from surya_kundal.pipeline import Providers, refresh_geoip, run_enrichment
 from surya_kundal.watcher import Watcher
 
 logger = logging.getLogger(__name__)
+
+GEOIP_REFRESH_SECONDS = 24 * 3600  # check for newer GeoLite2 files daily
 
 
 class Service:
@@ -90,7 +92,11 @@ class Service:
             logger.exception("ATT&CK mapping failed; will retry")
 
     def _enrich_loop(self, providers: Providers, stop: threading.Event) -> None:
+        last_geo_refresh = float("-inf")
         while not stop.is_set():
+            if time.monotonic() - last_geo_refresh >= GEOIP_REFRESH_SECONDS:
+                last_geo_refresh = time.monotonic()
+                refresh_geoip(providers)
             try:
                 result = run_enrichment(
                     self._factory, providers, should_stop=stop.is_set, **self._budgets

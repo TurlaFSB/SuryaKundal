@@ -238,3 +238,17 @@ def test_tor_without_cache_or_network_is_unavailable(tmp_path):
     )
 
     assert not tor.load()
+
+
+def test_refresh_geoip_survives_a_failed_download(caplog):
+    from surya_kundal.enrichment.geoip_update import GeoIPUpdateError
+    from surya_kundal.pipeline import Providers, refresh_geoip
+
+    def failing():
+        raise GeoIPUpdateError("boom")
+
+    providers = Providers(
+        geo=None, tor=None, abuse=None, virustotal=None, notes=[], geoip_update=failing
+    )  # type: ignore[arg-type]
+    refresh_geoip(providers)  # must not raise
+    assert "GeoIP database update failed" in caplog.text

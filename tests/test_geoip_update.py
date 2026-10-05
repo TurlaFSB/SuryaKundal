@@ -235,3 +235,21 @@ def test_cli_geoip_lookup_without_databases_explains_what_to_do(tmp_path, capsys
 
     assert code == 1
     assert "geoip update" in capsys.readouterr().err
+
+
+def test_update_all_tries_the_second_edition_when_the_first_fails(tmp_path):
+    asn = _archive(tmp_path, "GeoLite2-ASN", ASN_RECORDS)
+
+    def handler(request):
+        if request.url.host == "download.maxmind.com":
+            edition = request.url.path.split("/")[3]
+            if "City" in edition:
+                return httpx.Response(401)
+            return httpx.Response(
+                302, headers={"location": f"https://storage.example.net/{edition}.tgz"}
+            )
+        return httpx.Response(200, content=asn)
+
+    with pytest.raises(GeoIPUpdateError, match=r"GeoLite2-City.*updated: GeoLite2-ASN"):
+        update_all(tmp_path / "geo", ACCOUNT, KEY, client=_client(handler))
+    assert (tmp_path / "geo" / "GeoLite2-ASN.mmdb").is_file()

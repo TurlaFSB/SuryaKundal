@@ -8,7 +8,13 @@ from collections.abc import Callable
 
 import httpx
 
-from surya_kundal.enrichment.http import DEFAULT_TIMEOUT, ProviderError, QuotaExceeded, send
+from surya_kundal.enrichment.http import (
+    DEFAULT_TIMEOUT,
+    AuthError,
+    ProviderError,
+    QuotaExceeded,
+    send,
+)
 
 FILE_URL = "https://www.virustotal.com/api/v3/files/{sha256}"
 PROVIDER = "virustotal"
@@ -72,7 +78,7 @@ class VirusTotalClient:
         if status == 429:
             raise QuotaExceeded("VirusTotal limit reached (429)")
         if status in (401, 403):
-            raise ProviderError("VirusTotal rejected the API key")
+            raise AuthError("VirusTotal rejected the API key")
         if status != 200:
             raise ProviderError(f"VirusTotal returned HTTP {status}")
         try:

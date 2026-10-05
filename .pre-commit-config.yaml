@@ -8,9 +8,23 @@ repos:
         args: ["--maxkb=500"]
       - id: end-of-file-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+  - repo: local
     hooks:
+      # Local hooks use the versions pinned by `pip install -e ".[dev]"`, so they
+      # cannot drift from CI.
       - id: ruff
-        args: ["--fix"]
+        name: ruff
+        entry: ruff check --fix
+        language: system
+        types: [python]
       - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy (strict, same as CI)
+        entry: mypy
+        language: system
+        pass_filenames: false
+        types: [python]

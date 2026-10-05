@@ -1,5 +1,5 @@
 <!-- Paste inside <ossec_config> in /var/ossec/etc/ossec.conf on the machine running Cowrie.
-     Adjust the path to your Cowrie install. -->
+     Change the path below to your Cowrie log. -->
 <localfile>
   <log_format>json</log_format>
   <location>/home/worm/cowrie/var/log/cowrie/cowrie.json</location>

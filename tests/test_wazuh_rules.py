@@ -154,7 +154,15 @@ def test_frequency_rules_are_well_formed() -> None:
         assert int(rule.attrib["timeframe"]) > 0
 
 
-def test_sample_lines_are_json() -> None:
-    sample = Path(__file__).resolve().parent.parent / "wazuh" / "samples" / "cowrie_events.jsonl"
-    lines = [json.loads(line) for line in sample.read_text().splitlines() if line.strip()]
-    assert {fire(e) for e in lines} >= {100510, 100514, 100530, 100540}
+def test_sample_events_produce_the_expected_rules() -> None:
+    """The same samples and expectations ``wazuh/logtest.sh`` checks on a real manager."""
+    folder = Path(__file__).resolve().parent.parent / "wazuh" / "samples"
+    lines = [json.loads(x) for x in (folder / "cowrie_events.jsonl").read_text().splitlines() if x]
+    expected = [x for x in (folder / "expected.txt").read_text().splitlines() if x]
+    assert len(lines) == len(expected)
+    by_id = {r.attrib["id"]: r for r in _rules()}
+    for sample, want in zip(lines, expected, strict=True):
+        fired = fire(sample)
+        assert fired is not None, sample
+        text = str(fired) + by_id[str(fired)].findtext("description", "")
+        assert want in text, (sample, want, text)

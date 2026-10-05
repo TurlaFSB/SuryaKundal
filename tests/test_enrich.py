@@ -11,7 +11,7 @@ from surya_kundal.database.models import FileIntel, HoneypotSession, IpGeo, IpIn
 from surya_kundal.database.repository import save_session
 from surya_kundal.enrichment.enrich import enrich_pending
 from surya_kundal.enrichment.geoip import ASN_DB, CITY_DB, GeoIPLookup
-from surya_kundal.enrichment.http import ProviderError, QuotaExceeded
+from surya_kundal.enrichment.http import AuthError, ProviderError, QuotaExceeded
 
 NOW = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
 PUBLIC_IP = "8.8.8.8"
@@ -150,6 +150,33 @@ def test_a_quota_error_stops_that_provider_but_keeps_earlier_results(db):
     assert result.abuse == 1
     assert result.stopped == ["abuseipdb"]
     assert _count(db, IpIntel) == 1
+
+
+def test_a_rejected_api_key_stops_the_provider_after_one_call(db):
+    for i in range(3):
+        _session(db, f"s{i}", f"45.33.32.{i + 1}", start=f"2026-10-05T10:0{i}:00.000000Z")
+
+    class BadKey:
+        calls = 0
+
+        def check(self, ip):
+            BadKey.calls += 1
+            raise AuthError("rejected the API key")
+
+    result = enrich_pending(db, abuse=BadKey(), now=NOW)
+
+    assert BadKey.calls == 1
+    assert result.stopped == ["abuseipdb"]
+
+
+def test_malformed_hashes_do_not_use_budget_or_reach_virustotal(db):
+    _session(db, "a", OTHER_IP, sha="not-a-hash")
+    _session(db, "b", PUBLIC_IP, sha=SHA1)
+    vt = FakeVT()
+
+    enrich_pending(db, virustotal_client=vt, now=NOW)
+
+    assert vt.calls == [SHA1]
 
 
 def test_one_failing_ip_does_not_block_the_rest(db):

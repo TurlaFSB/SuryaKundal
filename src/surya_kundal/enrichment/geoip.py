@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,14 +59,40 @@ class GeoIPLookup:
 
     def __init__(self, db_dir: str | Path) -> None:
         self._dir = Path(db_dir).expanduser()
+        self._stamps: dict[str, tuple[int, int] | None] = {}
         self._city = self._open(CITY_DB)
         self._asn = self._open(ASN_DB)
+
+    def _stamp(self, filename: str) -> tuple[int, int] | None:
+        try:
+            stat = os.stat(self._dir / filename)
+        except OSError:
+            return None
+        return stat.st_ino, stat.st_mtime_ns
+
+    def refresh(self) -> bool:
+        """Reopen any database file that was replaced (or appeared) since it was opened.
+
+        An update swaps the file atomically, so a long-running service would otherwise
+        keep reading the old data (and the old, expired licence terms) until restarted.
+        """
+        changed = False
+        if self._stamp(CITY_DB) != self._stamps.get(CITY_DB):
+            if self._city is not None:
+                self._city.close()
+            self._city, changed = self._open(CITY_DB), True
+        if self._stamp(ASN_DB) != self._stamps.get(ASN_DB):
+            if self._asn is not None:
+                self._asn.close()
+            self._asn, changed = self._open(ASN_DB), True
+        return changed
 
     @property
     def available(self) -> bool:
         return self._city is not None or self._asn is not None
 
     def _open(self, filename: str) -> maxminddb.Reader | None:
+        self._stamps[filename] = self._stamp(filename)
         path = self._dir / filename
         if not path.is_file():
             logger.warning("GeoIP database not found: %s (run: surya-kundal geoip update)", path)

@@ -88,5 +88,9 @@ class TorExitList:
         with tempfile.NamedTemporaryFile(
             "w", dir=self._path.parent, delete=False, encoding="utf-8"
         ) as tmp:
-            tmp.write(response.text)
+            try:
+                tmp.write(response.text)
+            except BaseException:
+                Path(tmp.name).unlink(missing_ok=True)  # no stray temp file on a failed write
+                raise
         os.replace(tmp.name, self._path)  # atomic: never a half-written cache

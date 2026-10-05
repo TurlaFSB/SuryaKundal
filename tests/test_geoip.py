@@ -92,3 +92,29 @@ def test_fresh_database_does_not_warn(db_dir, caplog):
         GeoIPLookup(db_dir)
 
     assert caplog.text == ""
+
+
+def test_refresh_picks_up_a_replaced_database(tmp_path):
+    build_mmdb(tmp_path / CITY_DB, "GeoLite2-City", CITY_RECORDS)
+    build_mmdb(tmp_path / ASN_DB, "GeoLite2-ASN", ASN_RECORDS)
+    geo = GeoIPLookup(tmp_path)
+    assert geo.lookup("8.8.8.8").city == "Mountain View"
+    assert geo.refresh() is False  # nothing changed
+
+    replacement = {"8.8.8.8": {"city": {"names": {"en": "Elsewhere"}}}}
+    build_mmdb(tmp_path / "new.mmdb", "GeoLite2-City", replacement)
+    (tmp_path / "new.mmdb").replace(tmp_path / CITY_DB)  # atomic swap, as an update does
+
+    assert geo.refresh() is True
+    assert geo.lookup("8.8.8.8").city == "Elsewhere"
+    geo.close()
+
+
+def test_refresh_loads_a_database_that_appears_later(tmp_path):
+    geo = GeoIPLookup(tmp_path)
+    assert not geo.available
+    build_mmdb(tmp_path / CITY_DB, "GeoLite2-City", CITY_RECORDS)
+
+    assert geo.refresh() is True
+    assert geo.available
+    geo.close()
