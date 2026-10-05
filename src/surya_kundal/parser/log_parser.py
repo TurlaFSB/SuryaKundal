@@ -62,6 +62,8 @@ def summarize(session_events: Iterable[dict]) -> dict[str, Any]:
         "logins": [],
         "commands": [],
         "downloads": [],
+        "uploads": [],
+        "tunnels": [],
     }
     for event in session_events:
         timestamp = event.get("timestamp")
@@ -87,6 +89,25 @@ def summarize(session_events: Iterable[dict]) -> dict[str, Any]:
                 {
                     "url": event.get("url"),
                     "sha256": event.get("shasum"),
+                    "timestamp": timestamp,
+                }
+            )
+        elif eventid == "cowrie.session.file_upload":
+            summary["uploads"].append(
+                {
+                    "filename": event.get("filename"),
+                    "destination": event.get("destfile"),
+                    "sha256": event.get("shasum"),
+                    "timestamp": timestamp,
+                }
+            )
+        elif eventid == "cowrie.direct-tcpip.request":
+            summary["tunnels"].append(
+                {
+                    "dst_ip": event.get("dst_ip"),
+                    "dst_port": event.get("dst_port"),
+                    "orig_ip": event.get("orig_ip"),
+                    "orig_port": event.get("orig_port"),
                     "timestamp": timestamp,
                 }
             )

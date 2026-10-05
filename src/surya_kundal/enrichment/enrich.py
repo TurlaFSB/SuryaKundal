@@ -16,7 +16,14 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from surya_kundal.database.models import Download, FileIntel, HoneypotSession, IpGeo, IpIntel
+from surya_kundal.database.models import (
+    Download,
+    FileIntel,
+    HoneypotSession,
+    IpGeo,
+    IpIntel,
+    Upload,
+)
 from surya_kundal.enrichment import abuseipdb, virustotal
 from surya_kundal.enrichment.abuseipdb import AbuseIPDBClient
 from surya_kundal.enrichment.geoip import GeoIPLookup, is_public_ip
@@ -173,13 +180,17 @@ def _enrich_files(
     result: EnrichResult,
     should_stop: Callable[[], bool],
 ) -> None:
+    # Files the attacker fetched and files the attacker uploaded, newest first.
+    seen = (
+        select(Download.sha256.label("sha256"), Download.timestamp.label("at"))
+        .where(Download.sha256.is_not(None))
+        .union_all(select(Upload.sha256, Upload.timestamp).where(Upload.sha256.is_not(None)))
+        .subquery()
+    )
     hashes = [
         sha
         for sha in db.scalars(
-            select(Download.sha256)
-            .where(Download.sha256.is_not(None))
-            .group_by(Download.sha256)
-            .order_by(func.max(Download.timestamp).desc())
+            select(seen.c.sha256).group_by(seen.c.sha256).order_by(func.max(seen.c.at).desc())
         )
         if sha
     ]

@@ -375,6 +375,10 @@ def _run_show(args: argparse.Namespace, settings: Settings) -> int:
                 print(f"      -> {match.technique_id} {match.rule_id} ({match.confidence})")
         for download in session.downloads:
             print(f"  downloaded {printable(download.url)} sha256={printable(download.sha256)}")
+        for upload in session.uploads:
+            print(f"  uploaded {printable(upload.filename)} sha256={printable(upload.sha256)}")
+        for tunnel in session.tunnels:
+            print(f"  tunnel request to {printable(tunnel.dst_ip)}:{tunnel.dst_port}")
     return 0
 
 

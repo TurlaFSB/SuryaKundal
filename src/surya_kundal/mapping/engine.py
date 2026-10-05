@@ -33,7 +33,7 @@ from surya_kundal.mapping.attack import Catalog, load_catalog
 
 CONFIDENCES = ("low", "medium", "high")
 SCOPES = ("segment", "command")
-SESSION_RULES_REVISION = "1"  # bump when the session-level logic below changes
+SESSION_RULES_REVISION = "2"  # bump when the session-level logic below changes
 
 # Commands are attacker-controlled, and regular expressions can be made to run slowly
 # by crafted input. Anything longer than this is analysed as its first and last
@@ -228,6 +228,31 @@ def map_command(command: str, ruleset: RuleSet | None = None) -> list[Match]:
 
 
 # --- session-level rules ---------------------------------------------------
+
+
+def map_transfers(downloads: list[dict], uploads: list[dict]) -> list[Match]:
+    """File transfers into the honeypot are ingress tool transfer, whatever tool was used."""
+    matches = [
+        Match("transfer-download", "T1105", "high", f"downloaded {item.get('url') or '?'}"[:300])
+        for item in downloads
+    ]
+    matches += [
+        Match("transfer-upload", "T1105", "high", f"uploaded {item.get('filename') or '?'}"[:300])
+        for item in uploads
+    ]
+    return matches
+
+
+def map_tunnels(tunnels: list[dict]) -> list[Match]:
+    """Port-forwarding requests mean the attacker wants to use the host as a relay."""
+    if not tunnels:
+        return []
+    targets = {f"{t.get('dst_ip')}:{t.get('dst_port')}" for t in tunnels}
+    sample = ", ".join(sorted(targets)[:3])
+    evidence = (
+        f"{len(tunnels)} forwarding request(s) to {len(targets)} destination(s), e.g. {sample}"
+    )
+    return [Match("tunnel-request", "T1090", "high", evidence[:300])]
 
 
 def map_logins(logins: list[dict]) -> list[Match]:

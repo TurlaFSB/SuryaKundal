@@ -14,6 +14,8 @@ Contract that summarize() must satisfy:
         "logins":    [{"username", "password", "success": bool, "timestamp"}, ...],
         "commands":  [{"command", "timestamp"}, ...],        # in typed order
         "downloads": [{"url", "sha256", "timestamp"}, ...],
+        "uploads":   [{"filename", "destination", "sha256", "timestamp"}, ...],
+        "tunnels":   [{"dst_ip", "dst_port", "orig_ip", "orig_port", "timestamp"}, ...],
     }
 """
 
@@ -164,6 +166,8 @@ def test_summarize_empty_session_returns_empty_collections():
         "logins": [],
         "commands": [],
         "downloads": [],
+        "uploads": [],
+        "tunnels": [],
     }
 
 

@@ -11,13 +11,24 @@ from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
     Command,
+    Download,
     HoneypotSession,
     Login,
     SessionMapping,
     TechniqueMatch,
+    TunnelRequest,
+    Upload,
 )
 from surya_kundal.mapping.attack import load_catalog
-from surya_kundal.mapping.engine import Match, RuleSet, load_rules, map_command, map_logins
+from surya_kundal.mapping.engine import (
+    Match,
+    RuleSet,
+    load_rules,
+    map_command,
+    map_logins,
+    map_transfers,
+    map_tunnels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +40,9 @@ class MapResult:
     failed: int = 0
 
 
-def _counts(db: Session, model: type[Command] | type[Login]) -> dict[str, int]:
+def _counts(
+    db: Session, model: type[Command | Login | Download | Upload | TunnelRequest]
+) -> dict[str, int]:
     query = select(model.session_id, func.count()).group_by(model.session_id)
     return dict(db.execute(query).all())
 
@@ -37,6 +50,9 @@ def _counts(db: Session, model: type[Command] | type[Login]) -> dict[str, int]:
 def _pending_session_ids(db: Session, ruleset: RuleSet, attack_version: str) -> list[str]:
     commands = _counts(db, Command)
     logins = _counts(db, Login)
+    downloads = _counts(db, Download)
+    uploads = _counts(db, Upload)
+    tunnels = _counts(db, TunnelRequest)
     done = {m.session_id: m for m in db.scalars(select(SessionMapping))}
     pending = []
     for session_id in db.scalars(select(HoneypotSession.id).order_by(HoneypotSession.start_time)):
@@ -47,6 +63,8 @@ def _pending_session_ids(db: Session, ruleset: RuleSet, attack_version: str) -> 
             or mapping.attack_version != attack_version
             or mapping.command_count != commands.get(session_id, 0)
             or mapping.login_count != logins.get(session_id, 0)
+            or mapping.transfer_count != downloads.get(session_id, 0) + uploads.get(session_id, 0)
+            or mapping.tunnel_count != tunnels.get(session_id, 0)
         ):
             pending.append(session_id)
     return pending
@@ -82,6 +100,13 @@ def map_session(db: Session, session_id: str, ruleset: RuleSet | None = None) ->
     login_dicts = [{"username": x.username, "success": x.success} for x in session.logins]
     for match in map_logins(login_dicts):
         add(match)
+    downloads = [{"url": x.url} for x in session.downloads]
+    uploads = [{"filename": x.filename} for x in session.uploads]
+    for match in map_transfers(downloads, uploads):
+        add(match)
+    tunnels = [{"dst_ip": x.dst_ip, "dst_port": x.dst_port} for x in session.tunnels]
+    for match in map_tunnels(tunnels):
+        add(match)
 
     db.execute(delete(TechniqueMatch).where(TechniqueMatch.session_id == session_id))
     db.add_all(rows)
@@ -90,6 +115,8 @@ def map_session(db: Session, session_id: str, ruleset: RuleSet | None = None) ->
     mapping.attack_version = catalog.version
     mapping.command_count = len(session.commands)
     mapping.login_count = len(session.logins)
+    mapping.transfer_count = len(session.downloads) + len(session.uploads)
+    mapping.tunnel_count = len(session.tunnels)
     mapping.mapped_at = datetime.now(UTC)
     db.add(mapping)
     return len(rows)

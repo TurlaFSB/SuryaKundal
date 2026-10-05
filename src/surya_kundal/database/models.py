@@ -90,6 +90,16 @@ class HoneypotSession(Base):
         cascade="all, delete-orphan",
         order_by=lambda: (Download.timestamp, Download.id),
     )
+    uploads: Mapped[list[Upload]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by=lambda: (Upload.timestamp, Upload.id),
+    )
+    tunnels: Mapped[list[TunnelRequest]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by=lambda: (TunnelRequest.timestamp, TunnelRequest.id),
+    )
 
     def __repr__(self) -> str:
         return f"<HoneypotSession {self.id} from {self.src_ip}>"
@@ -157,6 +167,56 @@ class Download(Base):
     timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     session: Mapped[HoneypotSession] = relationship(back_populates="downloads")
+
+
+class Upload(Base):
+    """A file the attacker sent to the honeypot over SFTP or SCP."""
+
+    __tablename__ = "uploads"
+    __table_args__ = (
+        UniqueConstraint("session_id", "timestamp", "filename", "sha256", name="uq_upload_event"),
+        Index("ix_uploads_sha256", "sha256"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(Text, default="")
+    destination: Mapped[str | None] = mapped_column(Text)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    session: Mapped[HoneypotSession] = relationship(back_populates="uploads")
+
+
+class TunnelRequest(Base):
+    """An attempt to use the honeypot as a relay (SSH direct-tcpip port forwarding)."""
+
+    __tablename__ = "tunnel_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "timestamp",
+            "dst_ip",
+            "dst_port",
+            "orig_ip",
+            "orig_port",
+            name="uq_tunnel_event",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    dst_ip: Mapped[str] = mapped_column(Text, default="")
+    dst_port: Mapped[int] = mapped_column(Integer, default=0)
+    orig_ip: Mapped[str] = mapped_column(Text, default="")
+    orig_port: Mapped[int] = mapped_column(Integer, default=0)
+    timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    session: Mapped[HoneypotSession] = relationship(back_populates="tunnels")
 
 
 class IpGeo(Base):
@@ -230,6 +290,8 @@ class SessionMapping(Base):
     attack_version: Mapped[str] = mapped_column(String(16))
     command_count: Mapped[int] = mapped_column(Integer)
     login_count: Mapped[int] = mapped_column(Integer)
+    transfer_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tunnel_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     mapped_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 

@@ -8,7 +8,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from surya_kundal.database.models import Command, Download, HoneypotSession, Login
+from surya_kundal.database.models import (
+    Command,
+    Download,
+    HoneypotSession,
+    Login,
+    TunnelRequest,
+    Upload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +36,15 @@ def parse_timestamp(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _as_port(value: Any) -> int:
+    """A port number, or 0 when the log has something that is not one."""
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return port if 0 <= port <= 65535 else 0
 
 
 def _earliest(a: datetime | None, b: datetime | None) -> datetime | None:
@@ -102,5 +118,44 @@ def save_session(db: Session, session_id: str, summary: dict[str, Any]) -> Honey
         if (timestamp, url, sha256) not in seen_downloads:
             seen_downloads.add((timestamp, url, sha256))
             record.downloads.append(Download(url=url, sha256=sha256, timestamp=timestamp))
+
+    seen_uploads = {(x.timestamp, x.filename, x.sha256) for x in record.uploads}
+    for upload in summary.get("uploads", []):
+        timestamp = parse_timestamp(upload.get("timestamp"))
+        filename, sha256 = upload.get("filename") or "", upload.get("sha256")
+        if (timestamp, filename, sha256) not in seen_uploads:
+            seen_uploads.add((timestamp, filename, sha256))
+            record.uploads.append(
+                Upload(
+                    filename=filename,
+                    destination=upload.get("destination"),
+                    sha256=sha256,
+                    timestamp=timestamp,
+                )
+            )
+
+    seen_tunnels = {
+        (x.timestamp, x.dst_ip, x.dst_port, x.orig_ip, x.orig_port) for x in record.tunnels
+    }
+    for tunnel in summary.get("tunnels", []):
+        timestamp = parse_timestamp(tunnel.get("timestamp"))
+        tunnel_key = (
+            timestamp,
+            tunnel.get("dst_ip") or "",
+            _as_port(tunnel.get("dst_port")),
+            tunnel.get("orig_ip") or "",
+            _as_port(tunnel.get("orig_port")),
+        )
+        if tunnel_key not in seen_tunnels:
+            seen_tunnels.add(tunnel_key)
+            record.tunnels.append(
+                TunnelRequest(
+                    timestamp=tunnel_key[0],
+                    dst_ip=tunnel_key[1],
+                    dst_port=tunnel_key[2],
+                    orig_ip=tunnel_key[3],
+                    orig_port=tunnel_key[4],
+                )
+            )
 
     return record

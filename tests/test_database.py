@@ -56,6 +56,8 @@ def test_init_db_creates_expected_tables(engine):
         "file_intel",
         "session_mappings",
         "technique_matches",
+        "uploads",
+        "tunnel_requests",
         "alembic_version",
     }
 
