@@ -5,12 +5,15 @@
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 .venv/
 venv/
 cowrie-env/
 
 # Honeypot data (attacker IPs, malware samples)
-*.json.log
+cowrie.json*
+cowrie.log*
 var/
 downloads/
 tty/
