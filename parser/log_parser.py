@@ -30,10 +30,23 @@ def group_by_session(events):
 
 def summarize(session_events):
     """Turn one session's events into a single summary dict."""
-    summary = {"src_ip": None, "logins": [], "commands": []}
+    summary = {
+        "src_ip": None,
+        "start_time": None,
+        "end_time": None,
+        "duration_ms": None,
+        "client_version": None,
+        "hassh": None,
+        "logins": [],
+        "commands": [],
+        "downloads": [],
+    }
     for event in session_events:
+        timestamp = event.get("timestamp")
         if summary["src_ip"] is None:
             summary["src_ip"] = event.get("src_ip")
+        if summary["start_time"] is None:
+            summary["start_time"] = timestamp
 
         eventid = event.get("eventid")
         if eventid in ("cowrie.login.failed", "cowrie.login.success"):
@@ -42,10 +55,28 @@ def summarize(session_events):
                     "username": event.get("username"),
                     "password": event.get("password"),
                     "success": eventid == "cowrie.login.success",
+                    "timestamp": timestamp,
                 }
             )
         elif eventid == "cowrie.command.input":
-            summary["commands"].append(event.get("input"))
+            summary["commands"].append(
+                {"command": event.get("input"), "timestamp": timestamp}
+            )
+        elif eventid == "cowrie.session.file_download":
+            summary["downloads"].append(
+                {
+                    "url": event.get("url"),
+                    "sha256": event.get("shasum"),
+                    "timestamp": timestamp,
+                }
+            )
+        elif eventid == "cowrie.client.version":
+            summary["client_version"] = event.get("version")
+        elif eventid == "cowrie.client.kex":
+            summary["hassh"] = event.get("hassh")
+        elif eventid == "cowrie.session.closed":
+            summary["end_time"] = timestamp
+            summary["duration_ms"] = event.get("duration_ms")
     return summary
 
 
