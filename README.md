@@ -15,7 +15,7 @@ Internet / attacker
         |
   [Log parser]                   groups events into one record per session
         |
-  [Enrichment]                   AbuseIPDB, IPInfo, VirusTotal, GreyNoise
+  [Enrichment]                   free-tier and offline sources (provider list finalised in Phase 3)
         |
   [ATT&CK mapper]                command -> technique ID (e.g. T1105)
         |
@@ -46,23 +46,25 @@ All enrichment sources use free tiers. No paid services are required.
 ## Built so far
 
 - Cowrie 3.x running locally in a Kali VM, logging JSON events
-- Log parser in `parser/log_parser.py`
-- Test suite for the parser in `tests/`, with sample events taken from a real captured session
-- CI running `pytest` on every push
+- Log parser in `src/surya_kundal/parser/`
+- Test suite in `tests/`, with sample events taken from a real captured session
+- CI running ruff (lint + format check) and pytest on Python 3.11 and 3.13
 - Project skeleton for the later phases (empty packages, config template)
 
 ## Project layout
 
 ```
-parser/        Cowrie log parsing (Phase 1)
-database/      SQLAlchemy models and storage (Phase 2)
-enrichment/    Threat-intel API clients (Phase 3)
-mapping/       ATT&CK mapping engine (Phase 4)
-wazuh/         Custom Wazuh rules (Phase 5)
-dashboard/     Flask web UI (Phase 6)
-cowrie/        Notes on our Cowrie configuration
-tests/         pytest suite
-.env.example   Required environment variables
+src/surya_kundal/
+    parser/        Cowrie log parsing (Phase 1)
+    database/      SQLAlchemy models and storage (Phase 2)
+    enrichment/    Threat-intel clients (Phase 3)
+    mapping/       ATT&CK mapping engine (Phase 4)
+    dashboard/     Flask web UI (Phase 6)
+wazuh/             Custom Wazuh rules (Phase 5)
+cowrie/            Notes on our Cowrie configuration
+tests/             pytest suite
+pyproject.toml     Packaging, dependencies, ruff and pytest config
+.env.example       Required environment variables
 ```
 
 `docker-compose.yml` is added in Phase 7, once there is a real stack to orchestrate.
@@ -72,14 +74,15 @@ tests/         pytest suite
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
+ruff check . && ruff format --check .
 pytest -v
 ```
 
 Run the parser against a local Cowrie log:
 
 ```bash
-python -m parser.log_parser
+python -m surya_kundal.parser.log_parser
 ```
 
 ## Security notes

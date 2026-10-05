@@ -59,9 +59,7 @@ def summarize(session_events):
                 }
             )
         elif eventid == "cowrie.command.input":
-            summary["commands"].append(
-                {"command": event.get("input"), "timestamp": timestamp}
-            )
+            summary["commands"].append({"command": event.get("input"), "timestamp": timestamp})
         elif eventid == "cowrie.session.file_download":
             summary["downloads"].append(
                 {

@@ -27,3 +27,8 @@ data/
 .vscode/
 .idea/
 .DS_Store
+
+# Build artifacts
+*.egg-info/
+build/
+dist/

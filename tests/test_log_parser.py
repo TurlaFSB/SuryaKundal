@@ -19,7 +19,7 @@ Contract that summarize() must satisfy:
 
 import json
 
-from parser.log_parser import group_by_session, read_events, summarize
+from surya_kundal.parser.log_parser import group_by_session, read_events, summarize
 
 SESSION_A = "051b29d11c6c"
 SESSION_B = "aaaaaaaaaaaa"
@@ -144,9 +144,7 @@ def test_summarize_collects_commands_in_order_with_timestamps():
 def test_summarize_collects_file_downloads():
     downloads = summarize(SESSION_A_EVENTS)["downloads"]
 
-    assert downloads == [
-        {"url": "http://example.com/test/sh", "sha256": SHA, "timestamp": T_DL}
-    ]
+    assert downloads == [{"url": "http://example.com/test/sh", "sha256": SHA, "timestamp": T_DL}]
 
 
 def test_summarize_extracts_session_timing():
