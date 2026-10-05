@@ -54,8 +54,13 @@ class OllamaClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
             response = self._client.request(method, self.base_url + path, **kwargs)
+        except httpx.ConnectTimeout as exc:
+            raise LLMError(
+                "no answer from the model server (connection timed out): is Ollama running, "
+                "listening on this address (OLLAMA_HOST=0.0.0.0), and not blocked by a firewall?"
+            ) from exc
         except httpx.TimeoutException as exc:
-            raise LLMError("the model server timed out") from exc
+            raise LLMError("the model server timed out while generating") from exc
         except httpx.TransportError as exc:
             raise LLMError(f"cannot reach the model server ({type(exc).__name__})") from exc
         if response.status_code == 404:

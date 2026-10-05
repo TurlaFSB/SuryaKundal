@@ -71,8 +71,14 @@ def test_missing_text_and_network_failures():
 
     with pytest.raises(LLMError, match="cannot reach"):
         _client(refuse).models()
-    with pytest.raises(LLMError, match="timed out"):
+    with pytest.raises(LLMError, match="timed out while generating"):
         _client(slow).models()
+
+    def no_answer(request):
+        raise httpx.ConnectTimeout("blocked")
+
+    with pytest.raises(LLMError, match="OLLAMA_HOST"):
+        _client(no_answer).models()
 
 
 def test_url_must_be_http():
