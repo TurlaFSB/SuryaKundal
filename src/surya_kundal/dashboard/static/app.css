@@ -45,6 +45,7 @@ p { margin: 0 0 10px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 .panel { background: var(--surface); border-radius: var(--radius); padding: 20px 22px; overflow-x: auto; margin-bottom: 0; }
 .panel.wide { grid-column: 1 / -1; }
+@media (min-width: 900px) { .panel.half { grid-column: span 2; } }
 .panel.narrow { max-width: 520px; margin: 48px auto; }
 main > .panel { margin-bottom: 16px; }
 

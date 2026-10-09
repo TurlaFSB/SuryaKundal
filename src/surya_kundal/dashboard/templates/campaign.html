@@ -16,13 +16,13 @@
     </tbody>
   </table>
 </section>
-<section class="panel">
+<section class="panel half">
   <h2>Source addresses</h2>
   <ul class="plain">
     {% for ip, n, country in d.ips %}<li><a href="{{ url_for('sessions', q=ip) }}">{{ ip | p }}</a> {{ (country or '') | p }} <span class="num">{{ n }}</span></li>{% endfor %}
   </ul>
 </section>
-<section class="panel">
+<section class="panel half">
   <h2>Techniques</h2>
   <ul class="plain">
     {% for t, n in d.techniques %}<li><a href="{{ url_for('sessions', technique=t) }}">{{ t | p }}</a> <span class="num">{{ n }}</span></li>{% else %}<li class="muted">None mapped.</li>{% endfor %}

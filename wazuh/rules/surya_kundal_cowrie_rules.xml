@@ -97,7 +97,7 @@
 
   <rule id="100618" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(systemd-detect-virt|virt-what|dmesg|dmidecode|lspci|lsmod)(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(grep|egrep)\s+.*(hypervisor|vmware|virtualbox|qemu|kvm)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|head|less|more|grep|ls|stat|test|\[)\s+.*(/proc/(1|self)/(cgroup|sched|environ)|/sys/class/dmi|/sys/hypervisor|/proc/(scsi|ide)\b|/\.dockerenv|/run/\.containerenv)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(systemd-detect-virt|virt-what|dmesg|dmidecode|lspci|lsmod)(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(grep|egrep)\s+.*(hypervisor|vmware|virtualbox|qemu|kvm)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|head|less|more|grep|ls|stat|test|\[)\s+.*(/proc/(1|self)/(cgroup|sched|environ)|/sys/class/dmi|/sys/hypervisor|/proc/(scsi|ide)\b|/\.dockerenv|/run/\.containerenv)</field>
     <description>Cowrie: Checking whether the host is a VM, container or sandbox [discovery-virtualization]</description>
     <mitre><id>T1497</id></mitre>
     <group>command,</group>
@@ -105,7 +105,7 @@
 
   <rule id="100620" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|less|more|head|tail|grep|cp|cut|awk)\s+.*/etc/g?shadow\b|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*unshadow(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|less|more|head|tail|grep|cp|cut|awk)\s+.*/etc/g?shadow\b|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+unshadow(\s|$)</field>
     <description>Cowrie: Reading or copying the password hash file [credential-shadow]</description>
     <mitre><id>T1003.008</id></mitre>
     <group>command,</group>
@@ -113,7 +113,7 @@
 
   <rule id="100621" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*history(\s+\d+)?\s*$|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|less|more|head|tail|grep)\s+.*\.(bash_|zsh_|sh_)?history\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+history(\s+\d+)?\s*$|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|less|more|head|tail|grep)\s+.*\.(bash_|zsh_|sh_)?history\b</field>
     <description>Cowrie: Reading shell history for secrets [credential-shell-history]</description>
     <mitre><id>T1552.003</id></mitre>
     <group>command,</group>
@@ -121,7 +121,7 @@
 
   <rule id="100623" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|less|more|head|tail|grep|cp)\s+.*(\.aws/credentials|\.git-credentials|\.netrc|\.pgpass|\.my\.cnf|wp-config\.php|\.docker/config\.json|/\.env\b)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|less|more|head|tail|grep|cp)\s+.*(\.aws/credentials|\.git-credentials|\.netrc|\.pgpass|\.my\.cnf|wp-config\.php|\.docker/config\.json|/\.env\b)</field>
     <description>Cowrie: Reading well-known credential files [credential-files]</description>
     <mitre><id>T1552.001</id></mitre>
     <group>command,</group>
@@ -129,7 +129,7 @@
 
   <rule id="100624" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(hydra|medusa|ncrack|patator|sshcrack|crackmapexec|john|hashcat)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(hydra|medusa|ncrack|patator|sshcrack|crackmapexec|john|hashcat)(\s|$)</field>
     <description>Cowrie: Running a password-guessing tool from the honeypot [credential-brute-force-tool]</description>
     <mitre><id>T1110</id></mitre>
     <group>command,</group>
@@ -153,7 +153,7 @@
 
   <rule id="100628" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*systemctl\s+(enable|daemon-reload|link)\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+systemctl\s+(enable|daemon-reload|link)\b</field>
     <description>Cowrie: Enabling or registering a systemd service [persistence-systemd-enable]</description>
     <mitre><id>T1543.002</id></mitre>
     <group>command,</group>
@@ -185,7 +185,7 @@
 
   <rule id="100632" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(useradd|adduser|newusers)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(useradd|adduser|newusers)(\s|$)</field>
     <description>Cowrie: Creating a local account [persistence-create-account]</description>
     <mitre><id>T1136.001</id></mitre>
     <group>command,</group>
@@ -201,7 +201,7 @@
 
   <rule id="100634" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(passwd|chpasswd|usermod|chage|gpasswd)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(passwd|chpasswd|usermod|chage|gpasswd)(\s|$)</field>
     <description>Cowrie: Changing passwords, groups or account settings [persistence-account-manipulation]</description>
     <mitre><id>T1098</id></mitre>
     <group>command,</group>
@@ -225,7 +225,7 @@
 
   <rule id="100640" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(wget|curl|tftp|ftpget|fetch|lwp-download|aria2c|axel)(?!.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com))(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*git\s+clone\s</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(?!curl\b.*\s(-T|--upload-file|-F|--form|--data-binary)\b)(wget|curl|tftp|ftpget|fetch|lwp-download|aria2c|axel)(?!.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com))(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+git\s+clone\s</field>
     <description>Cowrie: Fetching a file onto the host [c2-download]</description>
     <mitre><id>T1105</id></mitre>
     <group>command,</group>
@@ -241,7 +241,7 @@
 
   <rule id="100645" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*python[23]?(\.\d+)?\s+(-c|-m|\S+\.py)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+python[23]?(\.\d+)?\s+(-c|-m|\S+\.py)</field>
     <description>Cowrie: Running Python code or scripts [exec-python]</description>
     <mitre><id>T1059.006</id></mitre>
     <group>command,</group>
@@ -265,7 +265,7 @@
 
   <rule id="100650" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*ssh\s+(.*\s)?-\w*[LRD]\s?\S</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+ssh\s+(.*\s)?-\w*[LRD]\s?\S</field>
     <description>Cowrie: Tunnelling traffic through SSH [c2-tunnel]</description>
     <mitre><id>T1572</id></mitre>
     <group>command,</group>
@@ -289,7 +289,7 @@
 
   <rule id="100656" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(\b(xmrig|minerd|cpuminer|ethminer|cgminer|bfgminer|nbminer|kinsing|kdevtmpfsi)\b|stratum\+(tcp|ssl)://|--donate-level|pool\.minexmr|nanopool|supportxmr|moneroocean)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(?!(grep|egrep|fgrep|pgrep|pkill|killall|kill|ps|which|whereis|rm|locate)\b)(?=.*(\b(xmrig|minerd|cpuminer|ethminer|cgminer|bfgminer|nbminer|kinsing|kdevtmpfsi)\b|stratum\+(tcp|ssl)://|--donate-level|pool\.minexmr|nanopool|supportxmr|moneroocean))</field>
     <description>Cowrie: Cryptocurrency miner tooling or pool addresses [impact-cryptomining]</description>
     <mitre><id>T1496.001</id></mitre>
     <group>command,</group>
@@ -321,7 +321,7 @@
 
   <rule id="100661" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*touch\s+(.*\s)?(-[admrt]+\b|--(date|reference)\b)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+touch\s+(.*\s)?(-[admrt]+\b|--(date|reference)\b)</field>
     <description>Cowrie: Altering file timestamps [evasion-timestomp]</description>
     <mitre><id>T1070.006</id></mitre>
     <group>command,</group>
@@ -329,7 +329,7 @@
 
   <rule id="100663" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*((iptables|ip6tables)\s+.*(-F\b|--flush|-X\b|-P\s+\w+\s+ACCEPT)|nft\s+flush|ufw\s+(disable|reset)|(systemctl|service)\s+(stop|disable)\s+(firewalld|ufw|iptables|nftables)|service\s+(firewalld|ufw|iptables)\s+stop)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+((iptables|ip6tables)\s+.*(-F\b|--flush|-X\b|-P\s+\w+\s+ACCEPT)|nft\s+flush|ufw\s+(disable|reset)|(systemctl|service)\s+(stop|disable)\s+(firewalld|ufw|iptables|nftables)|service\s+(firewalld|ufw|iptables)\s+stop)</field>
     <description>Cowrie: Flushing or disabling the host firewall [defense-impair-firewall]</description>
     <mitre><id>T1686</id></mitre>
     <group>command,</group>
@@ -337,7 +337,7 @@
 
   <rule id="100664" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(setenforce\s+0|(systemctl|service)\s+(stop|disable)\s+(auditd|apparmor|rsyslog|syslog|wazuh-agent|ossec|falcon-sensor|clamav\S*|aegis|aliyun\S*|sentinelone|osqueryd)|service\s+(auditd|apparmor|rsyslog)\s+stop|(pkill|killall)\s+.*(auditd|rsyslog|wazuh|ossec|aegis|aliyun|barad|yunjing))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(setenforce\s+0|(systemctl|service)\s+(stop|disable)\s+(apparmor|rsyslog|syslog|wazuh-agent|ossec|falcon-sensor|clamav\S*|aegis|aliyun\S*|sentinelone|osqueryd)|service\s+(apparmor|rsyslog)\s+stop|(pkill|killall)\s+.*(auditd|rsyslog|wazuh|ossec|aegis|aliyun|barad|yunjing))</field>
     <description>Cowrie: Switching off security tooling [defense-impair-tools]</description>
     <mitre><id>T1685</id></mitre>
     <group>command,</group>
@@ -345,7 +345,7 @@
 
   <rule id="100665" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*auditctl\s+(-e\s*0|-D)\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(auditctl\s+(-e\s*0|-D)\b|(systemctl|service)\s+(stop|disable)\s+auditd\b|service\s+auditd\s+stop\b)</field>
     <description>Cowrie: Disabling or clearing the Linux audit rules [defense-impair-audit]</description>
     <mitre><id>T1685.004</id></mitre>
     <group>command,</group>
@@ -353,7 +353,7 @@
 
   <rule id="100667" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(reboot|shutdown|halt|poweroff|init\s+[06])(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*systemctl\s+(reboot|poweroff|halt)\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(reboot|shutdown|halt|poweroff|init\s+[06])(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+systemctl\s+(reboot|poweroff|halt)\b</field>
     <description>Cowrie: Shutting down or rebooting the host [impact-shutdown]</description>
     <mitre><id>T1529</id></mitre>
     <group>command,</group>
@@ -369,7 +369,7 @@
 
   <rule id="100622" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|cp|scp|tar|find|grep|head|tail|less|ls)\s+.*(id_(rsa|dsa|ecdsa|ed25519)\b|\.pem\b|/\.ssh(/|\s|$))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|cp|scp|tar|find|grep|head|tail|less|ls)\s+.*(id_(rsa|dsa|ecdsa|ed25519)\b|\.pem\b|/\.ssh(/|\s|$))</field>
     <description>Cowrie: Looking for or copying private keys [credential-private-keys]</description>
     <mitre><id>T1552.004</id></mitre>
     <group>command,</group>
@@ -377,7 +377,7 @@
 
   <rule id="100638" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*chattr\s+</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+chattr\s+</field>
     <description>Cowrie: Changing file attributes, e.g. unlocking .ssh before planting a key or locking a backdoor [evasion-chattr]</description>
     <mitre><id>T1222.002</id></mitre>
     <group>command,</group>
@@ -385,7 +385,7 @@
 
   <rule id="100639" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*chmod\s+(-\S+\s+)*([ugoa]*\+[rwxt]*s|[0-7]?[2467][0-7]{3}\s)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+chmod\s+(-\S+\s+)*([ugoa]*\+[rwxt]*s|[0-7]?[2467][0-7]{3}\s)</field>
     <description>Cowrie: Setting the setuid or setgid bit [privesc-setuid]</description>
     <mitre><id>T1548.001</id></mitre>
     <group>command,</group>
@@ -393,7 +393,7 @@
 
   <rule id="100641" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*chmod\s+(-\S+\s+)*([ugoa]*\+[rwst]*x|(?=[0-7]{3,4}\s)[0-7]*[1357])</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+chmod\s+(-\S+\s+)*([ugoa]*\+[rwst]*x|[ugoa]+[=-][rwxst]*\s|(?=[0-7]{3,4}\s)[0-7]*[1357])</field>
     <description>Cowrie: Making a file executable (usually right after downloading it) [exec-permission-change]</description>
     <mitre><id>T1222.002</id></mitre>
     <group>command,</group>
@@ -401,7 +401,7 @@
 
   <rule id="100642" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(sh|bash|dash|ash|zsh|ksh)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(sh|bash|dash|ash|zsh|ksh)(\s|$)</field>
     <description>Cowrie: Running a shell or shell script [exec-shell]</description>
     <mitre><id>T1059.004</id></mitre>
     <group>command,</group>
@@ -409,7 +409,7 @@
 
   <rule id="100647" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(perl|php|ruby|node|lua)\s+(-\S+|\S+\.(pl|php|rb|js|lua))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(perl|php|ruby|node|lua)\s+(-\S+|\S+\.(pl|php|rb|js|lua))</field>
     <description>Cowrie: Running Perl, PHP, Ruby, Node or Lua code [exec-scripting-interpreter]</description>
     <mitre><id>T1059</id></mitre>
     <group>command,</group>
@@ -417,7 +417,7 @@
 
   <rule id="100649" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(nc|ncat|netcat|socat)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(nc|ncat|netcat|socat)(\s|$)</field>
     <description>Cowrie: Using netcat or socat for raw network channels [c2-raw-socket-tool]</description>
     <mitre><id>T1095</id></mitre>
     <group>command,</group>
@@ -425,7 +425,7 @@
 
   <rule id="100651" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(proxychains\d*|tinyproxy|3proxy|redsocks|dante|danted)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(proxychains\d*|tinyproxy|3proxy|redsocks|dante|danted)(\s|$)</field>
     <description>Cowrie: Setting up or using a proxy [c2-proxy]</description>
     <mitre><id>T1090</id></mitre>
     <group>command,</group>
@@ -433,7 +433,7 @@
 
   <rule id="100653" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(ssh|sshpass|scp|sftp)\s++(?!-[A-Za-z]*V\b)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(ssh|sshpass|scp|sftp)\s++(?!-[A-Za-z]*V\b)</field>
     <description>Cowrie: Connecting onward over SSH [lateral-ssh]</description>
     <mitre><id>T1021.004</id></mitre>
     <group>command,</group>
@@ -449,7 +449,7 @@
 
   <rule id="100660" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(rm|unlink)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(rm|unlink)(?!\s+(-\S+\s+)*/\*?(\s|$))(\s|$)</field>
     <description>Cowrie: Deleting files, usually to remove the dropper after running it [evasion-delete-files]</description>
     <mitre><id>T1070.004</id></mitre>
     <group>command,</group>
@@ -465,7 +465,7 @@
 
   <rule id="100666" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(systemctl|service)\s+(stop|disable|kill)\s|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*service\s+\S+\s+stop\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(systemctl|service)\s+(stop|disable|kill)\s|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+service\s+\S+\s+stop\b</field>
     <description>Cowrie: Stopping a service [impact-service-stop]</description>
     <mitre><id>T1489</id></mitre>
     <group>command,</group>
@@ -473,7 +473,7 @@
 
   <rule id="100669" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(userdel|deluser)(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*usermod\s+.*-L\b|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*passwd\s+(-l|-d)\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(userdel|deluser)(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+usermod\s+.*-L\b|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+passwd\s+(-l|-d)\b</field>
     <description>Cowrie: Deleting or locking accounts [impact-account-removal]</description>
     <mitre><id>T1531</id></mitre>
     <group>command,</group>
@@ -481,7 +481,7 @@
 
   <rule id="100670" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(tar\s+(-?\w*c\w*|--create)\b|zip\s|7z\s+a\b|7za\s+a\b|rar\s+a\b)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(tar\s+(-?\w*c\w*|--create)\b|zip\s|7z\s+a\b|7za\s+a\b|rar\s+a\b)</field>
     <description>Cowrie: Compressing files with an archive utility [collection-archive]</description>
     <mitre><id>T1560.001</id></mitre>
     <group>command,</group>
@@ -489,15 +489,23 @@
 
   <rule id="100671" level="7">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*curl\s+(.*\s)?(-T\b|--upload-file|(-F|--form)\s+\S*@|--data-binary\s+@|-d\s+@)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*ftpput(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+curl\s+(.*\s)?(-T\b|--upload-file|(-F|--form)\s+\S*@|--data-binary\s+@|-d\s+@)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+ftpput(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+scp\s+(-\S+\s+)*[^\s:@]+\s+\S*@\S+:</field>
     <description>Cowrie: Uploading local data to a remote server [exfil-upload]</description>
     <mitre><id>T1048</id></mitre>
     <group>command,</group>
   </rule>
 
+  <rule id="100672" level="7">
+    <if_sid>100520</if_sid>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(grep|egrep|fgrep)\s+(-\S+\s+)*-\S*[rR]\S*\s+(-\S+\s+)*['"]?\S*(passw|secret|api[_-]?key|token)</field>
+    <description>Cowrie: Searching files recursively for passwords, secrets or keys [credential-search]</description>
+    <mitre><id>T1552.001</id></mitre>
+    <group>command,</group>
+  </rule>
+
   <rule id="100600" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(uname|hostnamectl|lscpu|lsb_release|nproc|free|dmidecode|lshw|arch|getconf|hostname|uptime|df|lsblk)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(uname|hostnamectl|lscpu|lsb_release|nproc|free|dmidecode|lshw|arch|getconf|hostname|uptime|df|lsblk)(\s|$)</field>
     <description>Cowrie: Querying OS, kernel, CPU, memory or disk details [discovery-system-info]</description>
     <mitre><id>T1082</id></mitre>
     <group>command,discovery,</group>
@@ -505,7 +513,7 @@
 
   <rule id="100601" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|head|tail|less|more|grep)\s+.*(/proc/(cpuinfo|meminfo|version|uptime|mounts|loadavg|partitions|cmdline|self/mounts|1/mounts)|/etc/(os-release|issue|[a-z]+[-_]release|hostname))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|head|tail|less|more|grep)\s+.*(/proc/(cpuinfo|meminfo|version|uptime|mounts|loadavg|partitions|cmdline|self/mounts|1/mounts)|/etc/(os-release|issue|[a-z]+[-_]release|hostname))</field>
     <description>Cowrie: Reading kernel and distribution information files [discovery-system-files]</description>
     <mitre><id>T1082</id></mitre>
     <group>command,discovery,</group>
@@ -513,7 +521,7 @@
 
   <rule id="100602" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(whoami|id|w|who|users|last|lastlog|logname)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(whoami|id|w|who|users|last|lastlog|logname)(\s|$)</field>
     <description>Cowrie: Finding out who is logged in and as whom [discovery-current-user]</description>
     <mitre><id>T1033</id></mitre>
     <group>command,discovery,</group>
@@ -521,7 +529,7 @@
 
   <rule id="100603" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(ifconfig|ip\s+(a|addr|address|link|route|r|neigh)|route|iwconfig|resolvectl)(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|head)\s+(/etc/resolv\.conf|/proc/net/(route|arp|dev))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(ifconfig|ip\s+(a|addr|address|link|route|r|neigh)|route|iwconfig|resolvectl)(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|head)\s+(/etc/resolv\.conf|/proc/net/(route|arp|dev))</field>
     <description>Cowrie: Enumerating interfaces, routes and resolver settings [discovery-network-config]</description>
     <mitre><id>T1016</id></mitre>
     <group>command,discovery,</group>
@@ -529,7 +537,7 @@
 
   <rule id="100604" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(curl|wget)\s+.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(curl|wget)\s+.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)</field>
     <description>Cowrie: Checking the host's public IP or internet reachability [discovery-external-ip]</description>
     <mitre><id>T1016.001</id></mitre>
     <group>command,discovery,</group>
@@ -537,7 +545,7 @@
 
   <rule id="100605" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(netstat|ss|lsof\s+-i)(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*cat\s+/proc/net/(tcp|udp)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(netstat|ss|lsof\s+-i)(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+cat\s+/proc/net/(tcp|udp)</field>
     <description>Cowrie: Listing open sockets and connections [discovery-network-connections]</description>
     <mitre><id>T1049</id></mitre>
     <group>command,discovery,</group>
@@ -545,7 +553,7 @@
 
   <rule id="100606" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(ps|top|htop|pgrep|pidof|pstree)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(ps|top|htop|pgrep|pidof|pstree)(\s|$)</field>
     <description>Cowrie: Listing running processes [discovery-processes]</description>
     <mitre><id>T1057</id></mitre>
     <group>command,discovery,</group>
@@ -553,7 +561,7 @@
 
   <rule id="100608" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|head|tail|less|more|grep|awk|cut)\s+.*/etc/passwd\b|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*getent\s+passwd</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|head|tail|less|more|grep|awk|cut)\s+.*/etc/passwd\b|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+getent\s+passwd</field>
     <description>Cowrie: Reading the local account list [discovery-local-accounts]</description>
     <mitre><id>T1087.001</id></mitre>
     <group>command,discovery,</group>
@@ -561,7 +569,7 @@
 
   <rule id="100609" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(groups|getent\s+group|cat\s+/etc/group)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(groups|getent\s+group|cat\s+/etc/group)(\s|$)</field>
     <description>Cowrie: Listing local groups and memberships [discovery-local-groups]</description>
     <mitre><id>T1069.001</id></mitre>
     <group>command,discovery,</group>
@@ -569,7 +577,7 @@
 
   <rule id="100612" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(systemctl\s+(list-units|list-unit-files|status|is-active)|service\s+--status-all|chkconfig\s+--list)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(systemctl\s+(list-units|list-unit-files|status|is-active)|service\s+--status-all|chkconfig\s+--list)</field>
     <description>Cowrie: Listing system services [discovery-services]</description>
     <mitre><id>T1007</id></mitre>
     <group>command,discovery,</group>
@@ -577,7 +585,7 @@
 
   <rule id="100614" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(cat|less|more|tail|head|grep|zcat|journalctl)\s+.*(/var/log/|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*journalctl)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*journalctl(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(cat|less|more|tail|head|grep|zcat|journalctl)\s+.*(/var/log/|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+journalctl)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+journalctl(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+ls\s+.*/var/log\b</field>
     <description>Cowrie: Reading system logs [discovery-log-enumeration]</description>
     <mitre><id>T1654</id></mitre>
     <group>command,discovery,</group>
@@ -585,7 +593,7 @@
 
   <rule id="100615" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*arp(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*cat\s+/etc/hosts\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+arp(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+cat\s+/etc/hosts\b</field>
     <description>Cowrie: Finding neighbouring hosts [discovery-remote-systems]</description>
     <mitre><id>T1018</id></mitre>
     <group>command,discovery,</group>
@@ -593,7 +601,7 @@
 
   <rule id="100616" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(nmap|masscan|zmap|zgrab|nikto|unicornscan)(\s|$)|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(nc|ncat|netcat)\s+(-\w*\s+)*-\w*z</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(nmap|masscan|zmap|zgrab|nikto|unicornscan)(\s|$)|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(nc|ncat|netcat)\s+(-\w*\s+)*-\w*z</field>
     <description>Cowrie: Scanning for open services [discovery-network-scan]</description>
     <mitre><id>T1046</id></mitre>
     <group>command,discovery,</group>
@@ -601,7 +609,7 @@
 
   <rule id="100617" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(chage\s+-l|cat\s+/etc/(login\.defs|pam\.d/\S+|security/pwquality\.conf))</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(chage\s+-l|cat\s+/etc/(login\.defs|pam\.d/\S+|security/pwquality\.conf))</field>
     <description>Cowrie: Inspecting password policy [discovery-password-policy]</description>
     <mitre><id>T1201</id></mitre>
     <group>command,discovery,</group>
@@ -609,7 +617,7 @@
 
   <rule id="100607" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(ls|find|locate|tree|stat|du)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(ls|find|locate|tree|stat|du)(\s|$)</field>
     <description>Cowrie: Browsing the filesystem (common and noisy, so low confidence) [discovery-files]</description>
     <mitre><id>T1083</id></mitre>
     <group>command,discovery,</group>
@@ -617,7 +625,7 @@
 
   <rule id="100610" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(dpkg\s+(-l|--list)|rpm\s+-qa|apt\s+list|yum\s+list|pip3?\s+(list|freeze)|which|whereis|type|command\s+-v)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(dpkg\s+(-l|--list)|rpm\s+-qa|apt\s+list|yum\s+list|pip3?\s+(list|freeze)|which|whereis|type|command\s+-v)(\s|$)</field>
     <description>Cowrie: Checking which tools or packages are installed [discovery-software]</description>
     <mitre><id>T1518</id></mitre>
     <group>command,discovery,</group>
@@ -625,7 +633,7 @@
 
   <rule id="100611" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(/bin/)?busybox\s+[A-Z0-9]{4,}\s*$</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(/bin/)?busybox\s+[A-Z0-9]{4,}\s*$</field>
     <description>Cowrie: Mirai-family probe: runs a made-up busybox applet to confirm busybox exists [discovery-busybox-probe]</description>
     <mitre><id>T1518</id></mitre>
     <group>command,discovery,</group>
@@ -633,7 +641,7 @@
 
   <rule id="100613" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(date|timedatectl|hwclock)(\s|$)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(date|timedatectl|hwclock)(\s|$)</field>
     <description>Cowrie: Reading the system clock (noisy, so low confidence) [discovery-system-time]</description>
     <mitre><id>T1124</id></mitre>
     <group>command,discovery,</group>
@@ -641,7 +649,7 @@
 
   <rule id="100619" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*ssh\s+-[A-Za-z]*V\b</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+ssh\s+-[A-Za-z]*V\b</field>
     <description>Cowrie: Checking the installed SSH version (a common honeypot-fingerprinting probe) [discovery-ssh-version]</description>
     <mitre><id>T1518</id></mitre>
     <group>command,discovery,</group>
@@ -649,7 +657,7 @@
 
   <rule id="100627" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*crontab\s+-l\b|(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*cat\s+/etc/crontab</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+crontab\s+-l\b|(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+cat\s+/etc/crontab</field>
     <description>Cowrie: Listing the user's cron jobs [persistence-cron-list]</description>
     <mitre><id>T1053.003</id></mitre>
     <group>command,</group>
@@ -665,7 +673,7 @@
 
   <rule id="100644" level="4">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*(\./|/tmp/|/var/tmp/|/dev/shm/)\S+</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(\./|/tmp/|/var/tmp/|/dev/shm/)\S+</field>
     <description>Cowrie: Running a file from the current or a world-writable directory [exec-dropped-file]</description>
     <mitre><id>T1059.004</id></mitre>
     <group>command,</group>

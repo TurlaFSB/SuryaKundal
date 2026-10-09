@@ -184,7 +184,9 @@ def session_rules() -> list[str]:
 
 
 _START = re.compile(r"(?<!\[)\^")
-_SEGMENT_START = r"(?:^|[;&|]\s*)(?:(?:sudo|nohup|env|time|exec)\s+)*"
+# Possessive, so a negative lookahead at the start of a rule cannot be dodged by backtracking
+# into a shorter prefix (" grep" after "|", or "pkill" after "sudo").
+_SEGMENT_START = r"(?:^|[;&|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+"
 
 
 def wazuh_pattern(pattern: str, scope: str) -> str:

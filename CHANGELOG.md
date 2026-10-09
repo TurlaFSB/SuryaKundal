@@ -7,6 +7,9 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- ATT&CK mapper accuracy set (`evaluation/`, `docs/MAPPER_ACCURACY.md`): 103 hand-labelled
+  commands, a scoring script, and a test that fails if precision or recall fall below 0.97.
+  The first run scored precision 0.90 and recall 0.93.
 - Campaign clustering (`surya-kundal campaigns build|list|show`): sessions that share a payload,
   a script, a tooling fingerprint or an unusual command sequence are grouped, with the evidence
   shown. IDs are stable between rebuilds. `run` regroups in the background
@@ -35,6 +38,11 @@ All notable changes to this project are recorded here. The format follows
   of materials per image (kept 90 days). Runs on every change and weekly.
 
 ### Changed
+- Mapper fixes found by the accuracy set: a miner name inside `ps | grep` no longer counts as
+  mining; `curl -F` uploads are no longer downloads; `scp` uploads count as exfiltration;
+  `chmod go=`, `service auditd stop`, `grep -r password`, and `ls /var/log` are now recognised;
+  `rm -rf /` is no longer reported as clearing traces. Wazuh rule prefix is now possessive so
+  rules that begin with a negative lookahead cannot be bypassed by backtracking.
 - Both images build from a base image pinned to an exact digest; Dependabot proposes updates.
 - Every GitHub Action is pinned to a full commit hash (Dependabot keeps them current); a test
   fails if an unpinned action is added.
