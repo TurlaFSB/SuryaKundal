@@ -147,6 +147,7 @@ class Filters:
     types: tuple[str, ...] = TYPES
     exclude: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
     include_private: bool = False
+    min_confidence: int = 0
 
 
 # --- parsing and validation ----------------------------------------------------
@@ -512,6 +513,8 @@ def collect(
         raise ValueError(f"unknown level {filters.min_level!r}; choose from {', '.join(LEVELS)}")
     if filters.days < 1:
         raise ValueError("days must be at least 1")
+    if not 0 <= filters.min_confidence <= 100:
+        raise ValueError("min-confidence must be between 0 and 100")
     unknown = set(filters.types) - set(TYPES)
     if unknown:
         raise ValueError(f"unknown type(s): {', '.join(sorted(unknown))}")
@@ -528,6 +531,7 @@ def collect(
         indicators += _url_indicators(db, since, now, summary)
 
     order = {"ipv4": 0, "ipv6": 1, "sha256": 2, "url": 3}
+    indicators = [i for i in indicators if i.confidence >= filters.min_confidence]
     indicators.sort(key=lambda i: (-i.confidence, order[i.kind], _sort_value(i)))
     for item in indicators:
         summary.counts[item.kind] = summary.counts.get(item.kind, 0) + 1

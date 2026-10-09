@@ -699,3 +699,28 @@ def test_command_never_writes_to_the_database(cli_db, tmp_path):
     before = path.read_bytes()
     assert main(["export", "--db", cli_db, "--min-level", "contact"]) == 0
     assert path.read_bytes() == before
+
+
+def test_min_confidence_drops_weak_indicators(seeded):
+    everything, _ = collect(seeded, min_level="contact")
+    strong, _ = collect(seeded, min_level="contact", min_confidence=60)
+    assert {i.value for i in strong} == {
+        "11.22.33.46",
+        "11.22.33.47",
+        "http://evil.example/x.sh",
+        SHA_A,
+    }
+    assert len(strong) < len(everything)
+    assert all(i.confidence >= 60 for i in strong)
+
+
+@pytest.mark.parametrize("bad", [-1, 101])
+def test_min_confidence_must_be_a_percentage(db, bad):
+    with pytest.raises(ValueError, match="between 0 and 100"):
+        collect(db, min_confidence=bad)
+
+
+def test_command_min_confidence(cli_db, capsys):
+    assert main(["export", "--db", cli_db, "--min-confidence", "60"]) == 0
+    out = capsys.readouterr().out
+    assert "11.22.33.44" in out and "11.22.33.55" not in out

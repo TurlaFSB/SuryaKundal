@@ -130,6 +130,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="how far an address must have got to be listed (default: guessing)",
     )
     export.add_argument(
+        "--min-confidence",
+        type=int,
+        default=0,
+        help="leave out indicators below this confidence, 0 to 100 (default: 0)",
+    )
+    export.add_argument(
         "--types",
         default="ip,file,url",
         help="comma-separated: ip, file, url (blocklist formats use ip only)",
@@ -199,6 +205,7 @@ def _run_export(args: argparse.Namespace, settings: Settings) -> int:
             types=types,
             exclude=ioc.parse_networks(entries),
             include_private=args.include_private,
+            min_confidence=args.min_confidence,
         )
         factory = readonly_database(args.db or settings.database_url)
         now = datetime.now(UTC)
