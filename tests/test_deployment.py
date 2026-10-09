@@ -97,3 +97,11 @@ def test_honeypot_healthcheck_does_not_open_ssh_sessions():
     health = (ROOT / "cowrie" / "healthcheck.py").read_text()
     assert "socket" not in health  # a connection would be logged as an attacker session
     assert "/proc/net/tcp" in health
+
+
+def test_honeypot_creates_the_directories_cowrie_needs_for_a_shell():
+    # Cowrie 3.x does not create these; without tty/ every login ends in "Error getting shell".
+    entrypoint = (ROOT / "cowrie" / "docker-entrypoint.sh").read_text()
+    for needed in ("var/lib/cowrie/tty", "var/lib/cowrie/downloads", "var/log/cowrie"):
+        assert needed in entrypoint
+        assert needed in COWRIE_DOCKERFILE

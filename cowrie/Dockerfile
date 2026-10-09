@@ -39,7 +39,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10002 cowrie \
  && useradd --uid 10002 --gid 10002 --no-create-home --home-dir /cowrie --shell /usr/sbin/nologin cowrie \
- && mkdir -p /cowrie/etc /cowrie/var/log/cowrie /cowrie/var/lib/cowrie /cowrie/var/run \
+ && mkdir -p /cowrie/etc /cowrie/var/log/cowrie /cowrie/var/lib/cowrie/tty /cowrie/var/lib/cowrie/downloads /cowrie/var/run \
  && chown -R 10002:10002 /cowrie
 COPY --from=build /opt/cowrie-venv /opt/cowrie-venv
 COPY . /opt/kit

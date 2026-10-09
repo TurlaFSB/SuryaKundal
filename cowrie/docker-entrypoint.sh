@@ -5,7 +5,9 @@
 set -euo pipefail
 
 cd /cowrie
-mkdir -p etc var/log/cowrie var/lib/cowrie var/run
+# Cowrie 3.x does not create these itself; a missing tty/ makes every login fail with
+# "Error getting shell" (session recordings) and downloads/ is where captured files go.
+mkdir -p etc var/log/cowrie var/lib/cowrie/tty var/lib/cowrie/downloads var/run
 
 if [[ "${1:-}" != "start" ]]; then
     exec "$@"   # e.g. `docker compose run cowrie bash`, for debugging
