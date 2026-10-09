@@ -33,7 +33,9 @@
     <rect class="step s{{ loop.index }}" x="0" y="{{ loop.index0 * 44 + 22 }}" width="{{ [(value / top * 300) | round(1), 10] | max if value else 0 }}" height="10" rx="5"/>
     {% endfor %}
   </svg>
-  <p class="muted">Most visitors never get past the first step.</p>
+  {% if depth.contact %}
+  <p class="muted">{{ depth.access }} of {{ depth.contact }} got in, {{ depth.hands_on }} ran commands, {{ depth.action }} went on to act.</p>
+  {% endif %}
 </section>
 
 <section class="panel">
