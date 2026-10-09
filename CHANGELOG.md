@@ -15,6 +15,10 @@ All notable changes to this project are recorded here. The format follows
 - Threat model for the platform itself (`docs/THREAT_MODEL.md`).
 - Migration 0007: composite index on `technique_matches (technique_id, session_id)`.
 
+- `Dockerfile` and `compose.yaml` for the pipeline and dashboard: unprivileged user, read-only
+  root filesystem, no capabilities, resource limits, health checks; policy tests keep it that way.
+- CI job that builds the image and runs it hardened.
+
 ### Changed
 - The dashboard opens the database read-only at the SQLite level, caches the overview for
   15 seconds, throttles wrong passwords per address, refuses unknown `Host` headers when no

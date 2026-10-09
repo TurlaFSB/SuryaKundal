@@ -47,6 +47,7 @@ dev = [
     "pytest-cov>=5.0",
     "hypothesis>=6.100",
     "pip-audit>=2.7",
+    "pyyaml>=6.0",
     "flask>=3.0",
     "waitress>=3.0",
 ]

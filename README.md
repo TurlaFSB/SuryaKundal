@@ -85,6 +85,18 @@ In a second terminal:
 surya-kundal dashboard                     # http://127.0.0.1:8080
 ```
 
+### Docker
+
+The pipeline and dashboard also run as hardened containers (unprivileged user, read-only root filesystem, no Linux capabilities, resource limits). Cowrie and Wazuh run separately; the stack only reads Cowrie's JSON log.
+
+```bash
+cp .env.example .env && chmod 600 .env     # set COWRIE_LOG_DIR and DASHBOARD_TOKEN (12+ characters)
+docker compose up -d --build
+docker compose ps                          # both services should become "healthy"
+```
+
+The dashboard is published on `http://127.0.0.1:8080` only; the password is `DASHBOARD_TOKEN`. Data lives in the `surya_data` volume. `docker compose logs -f pipeline` follows the pipeline.
+
 ## Usage
 
 ```bash
@@ -228,7 +240,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); t
 | 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Web dashboard | Done |
-| 7 | Docker Compose for the full stack | Planned |
+| 7 | Docker Compose for the full stack | In progress: pipeline and dashboard containers done; Cowrie container and image scanning next |
 | 8 | Cloud deployment and real-world data collection | Planned |
 | 9 | Write-up and demonstration | Planned |
 

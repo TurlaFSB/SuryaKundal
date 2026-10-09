@@ -78,3 +78,22 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: pip-audit --skip-editable
+
+  container:
+    name: Container builds and runs hardened
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the Compose file
+        run: |
+          cp .env.example .env
+          DASHBOARD_TOKEN=ci-token-0123456789 COWRIE_LOG_DIR=/tmp docker compose config --quiet
+      - name: Build the image
+        run: docker build --tag surya-kundal:ci .
+      - name: Run it the way Compose does (unprivileged, read-only, no capabilities)
+        run: |
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp surya-kundal:ci --version
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp surya-kundal:ci techniques --db sqlite:////tmp/ci.db
+          test "$(docker run --rm --entrypoint id surya-kundal:ci -u)" = "10001"
