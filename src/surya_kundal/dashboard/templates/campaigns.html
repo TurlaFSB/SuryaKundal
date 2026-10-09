@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Campaigns - Surya Kundal{% endblock %}
+{% block body %}
+<section class="panel">
+  <h1>Campaigns</h1>
+  <p class="muted">Sessions grouped by what they share: the same payload, script, tooling fingerprint or unusual command sequence. One campaign usually means one operator or one botnet.</p>
+  <table>
+    <thead><tr><th>Campaign</th><th>First seen</th><th>Last seen</th><th>Sessions</th><th>Source IPs</th><th>Strongest link</th></tr></thead>
+    <tbody>
+    {% for c in rows %}
+    <tr>
+      <td><a href="{{ url_for('campaign_view', campaign_id=c.id) }}">{{ c.id | p }}</a></td>
+      <td>{{ c.first_seen | stamp }}</td><td>{{ c.last_seen | stamp }}</td>
+      <td>{{ c.sessions }}</td><td>{{ c.ips }}</td>
+      <td>{% if c.top_evidence %}<span class="tag">{{ c.top_evidence.kind | p }}</span> <code>{{ c.top_evidence.value | p(limit=60) }}</code>{% else %}-{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="muted">No campaigns yet. They appear once at least two sessions share something distinctive; run <code>surya-kundal campaigns build</code> to refresh now.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

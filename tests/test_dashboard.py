@@ -455,3 +455,61 @@ def test_cli_rejects_a_short_token_and_a_missing_database(monkeypatch, tmp_path,
     assert main(["dashboard", "--db", f"sqlite:///{tmp_path / 'nope.db'}"]) == 2
     assert "does not exist yet" in capsys.readouterr().err
     assert not (tmp_path / "nope.db").exists()
+
+
+# --- campaigns pages ---------------------------------------------------------
+
+
+def test_campaign_pages_list_and_detail_escape_attacker_text(tmp_path):
+    from sample_events import SHA, T0, T_DL
+    from surya_kundal.campaigns import build_campaigns, list_campaigns
+
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'c.db'}")
+    init_db(engine)
+    sessions = make_session_factory(engine)
+    second = [
+        dict(make_event("bbbbbbbbbbbb", "cowrie.session.connect", T0), src_ip="198.51.100.9"),
+        dict(
+            make_event(
+                "bbbbbbbbbbbb",
+                "cowrie.session.file_download",
+                T_DL,
+                url="http://example.com/<script>alert(1)</script>",
+                shasum=SHA,
+            ),
+            src_ip="198.51.100.9",
+        ),
+    ]
+    with sessions() as db:
+        store_events(db, SESSION_A_EVENTS + second)
+        db.commit()
+        build_campaigns(db)
+        db.commit()
+        rows = list_campaigns(db)
+    assert len(rows) == 1
+    client = _client(sessions)
+    listing = client.get("/campaigns")
+    assert listing.status_code == 200 and rows[0].id.encode() in listing.data
+    detail = client.get(f"/campaigns/{rows[0].id}")
+    assert detail.status_code == 200
+    assert b"Why these sessions are grouped" in detail.data
+    assert b"<script>alert" not in detail.data
+    assert client.get("/campaigns/doesnotexist").status_code == 404
+
+
+def test_campaign_pages_survive_an_unmigrated_database(tmp_path):
+    from sqlalchemy import text as sql
+
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    init_db(engine)
+    sessions = make_session_factory(engine)
+    with sessions() as db:
+        store_events(db, SESSION_A_EVENTS)
+        db.commit()
+        db.execute(sql("DROP TABLE campaign_evidence"))
+        db.execute(sql("DROP TABLE campaign_sessions"))
+        db.execute(sql("DROP TABLE campaigns"))
+        db.commit()
+    client = _client(sessions)
+    assert client.get("/campaigns").status_code == 200
+    assert client.get("/campaigns/abc").status_code == 404

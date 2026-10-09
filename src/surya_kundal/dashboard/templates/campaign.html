@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Campaign {{ d.row.id | p }} - Surya Kundal{% endblock %}
+{% block body %}
+<section class="panel">
+  <h1>Campaign {{ d.row.id | p }}</h1>
+  <p class="muted">{{ d.row.sessions }} session{{ '' if d.row.sessions == 1 else 's' }} from {{ d.row.ips }} address{{ '' if d.row.ips == 1 else 'es' }}, {{ d.row.first_seen | stamp }} to {{ d.row.last_seen | stamp }}.</p>
+</section>
+<div class="grid">
+<section class="panel wide">
+  <h2>Why these sessions are grouped</h2>
+  <table>
+    <thead><tr><th>Shared</th><th>Value</th><th>Sessions</th></tr></thead>
+    <tbody>
+    {% for e in d.evidence %}<tr><td>{{ e.kind | p }}</td><td><code>{{ e.value | p(limit=120) }}</code></td><td>{{ e.sessions }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">No evidence recorded.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="panel">
+  <h2>Source addresses</h2>
+  <ul class="plain">
+    {% for ip, n, country in d.ips %}<li><a href="{{ url_for('sessions', q=ip) }}">{{ ip | p }}</a> {{ (country or '') | p }} <span class="num">{{ n }}</span></li>{% endfor %}
+  </ul>
+</section>
+<section class="panel">
+  <h2>Techniques</h2>
+  <ul class="plain">
+    {% for t, n in d.techniques %}<li><a href="{{ url_for('sessions', technique=t) }}">{{ t | p }}</a> <span class="num">{{ n }}</span></li>{% else %}<li class="muted">None mapped.</li>{% endfor %}
+  </ul>
+</section>
+<section class="panel wide">
+  <h2>Commands they typed</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Times</th></tr></thead>
+    <tbody>{% for c, n in d.commands %}<tr><td><code>{{ c | p(limit=120) }}</code></td><td>{{ n }}</td></tr>{% else %}<tr><td colspan="2" class="muted">None.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+<section class="panel wide">
+  <h2>Sessions</h2>
+  <table>
+    <thead><tr><th>Session</th><th>From</th><th>Started</th></tr></thead>
+    <tbody>{% for sid, ip, start in d.sessions %}<tr><td><a href="{{ url_for('session_view', session_id=sid) }}">{{ sid | p(limit=13) }}</a></td><td>{{ (ip or '-') | p }}</td><td>{{ start | stamp }}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+</div>
+{% endblock %}

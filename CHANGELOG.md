@@ -7,6 +7,10 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Campaign clustering (`surya-kundal campaigns build|list|show`): sessions that share a payload,
+  a script, a tooling fingerprint or an unusual command sequence are grouped, with the evidence
+  shown. IDs are stable between rebuilds. `run` regroups in the background
+  (`--campaign-interval`), and the dashboard has Campaigns pages. Migration 0008.
 - `surya-kundal export`: indicators of compromise (addresses, file hashes, URLs) as CSV,
   STIX 2.1, a plain blocklist, or an nftables script with self-expiring entries. Only public
   addresses are listed, an allow-list protects your own infrastructure, and values are

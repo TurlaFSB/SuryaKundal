@@ -14,6 +14,7 @@
   <nav aria-label="Main">
     <a href="{{ url_for('overview') }}"{% if request.endpoint == 'overview' %} aria-current="page"{% endif %}>Overview</a>
     <a href="{{ url_for('sessions') }}"{% if request.endpoint in ('sessions', 'session_view') %} aria-current="page"{% endif %}>Sessions</a>
+    <a href="{{ url_for('campaigns') }}"{% if request.endpoint in ('campaigns', 'campaign_view') %} aria-current="page"{% endif %}>Campaigns</a>
     <a href="{{ url_for('attack') }}"{% if request.endpoint == 'attack' %} aria-current="page"{% endif %}>ATT&amp;CK</a>
   </nav>
 </header>

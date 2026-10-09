@@ -25,8 +25,10 @@ from typing import Any
 
 from flask import Flask, Response, abort, g, jsonify, render_template, request
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from surya_kundal.campaigns import campaign_detail, list_campaigns
 from surya_kundal.dashboard import queries
 from surya_kundal.dashboard.alerts import recent_alerts
 from surya_kundal.database.engine import create_db_engine, make_session_factory
@@ -253,6 +255,29 @@ def create_app(
         if detail is None:
             abort(404)
         return render_template("session.html", d=detail)
+
+    @app.get("/campaigns")
+    def campaigns() -> str:
+        def build(d: Session) -> dict[str, Any]:
+            try:
+                rows = list_campaigns(d, limit=100)
+            except OperationalError:  # database not yet migrated to the campaigns table
+                rows = []
+            return {"rows": rows}
+
+        return page("campaigns.html", build)
+
+    @app.get("/campaigns/<campaign_id>")
+    def campaign_view(campaign_id: str) -> str:
+        if not queries.has_data(db()):
+            return render_template("empty.html")
+        try:
+            detail = campaign_detail(db(), campaign_id[:16])
+        except OperationalError:
+            detail = None
+        if detail is None:
+            abort(404)
+        return render_template("campaign.html", d=detail)
 
     @app.get("/attack")
     def attack() -> str:

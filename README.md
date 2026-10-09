@@ -115,6 +115,7 @@ surya-kundal show <session-id>    # one session: commands with their techniques
 surya-kundal dashboard            # read-only web UI
 surya-kundal doctor               # check the installation; exit code 1 on failure
 surya-kundal wazuh-rules          # generate the Wazuh rules
+surya-kundal campaigns build|list|show  # group sessions into campaigns, with evidence
 surya-kundal export               # indicators of compromise (CSV, STIX 2.1, blocklist, nftables)
 ```
 
@@ -255,7 +256,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); t
 | 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Web dashboard | Done |
-| 7 | Docker Compose for the full stack | In progress: pipeline, dashboard and honeypot containers done; image scanning and SBOM next |
+| 7 | Docker Compose for the full stack | Done: pipeline, dashboard and honeypot containers, image scanning, SBOM |
 | 8 | Cloud deployment and real-world data collection | Planned |
 | 9 | Write-up and demonstration | Planned |
 
