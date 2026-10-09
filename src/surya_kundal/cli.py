@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from surya_kundal import __version__
+from surya_kundal.campaigns import CampaignDetail, CampaignRow
 from surya_kundal.config import Settings, load_env_file
 from surya_kundal.database.engine import create_db_engine, init_db, make_session_factory
 from surya_kundal.database.migrate import SchemaError
@@ -159,6 +160,22 @@ def _build_parser() -> argparse.ArgumentParser:
     export.add_argument("--output", type=Path, default=None, help="write here instead of stdout")
     _add_db_option(export)
 
+    campaigns = sub.add_parser(
+        "campaigns", help="group sessions into campaigns (same tools, payloads or scripts)"
+    )
+    camp_sub = campaigns.add_subparsers(dest="campaigns_action", required=True)
+    build = camp_sub.add_parser("build", help="recompute the campaigns from all stored sessions")
+    _add_db_option(build)
+    camp_list = camp_sub.add_parser("list", help="show campaigns, biggest first")
+    camp_list.add_argument("--limit", type=int, default=20)
+    camp_list.add_argument(
+        "--min-ips", type=int, default=1, help="only campaigns spread over this many addresses"
+    )
+    _add_db_option(camp_list)
+    camp_show = camp_sub.add_parser("show", help="one campaign: why it was grouped, what it did")
+    camp_show.add_argument("campaign_id", help="campaign ID or a unique prefix")
+    _add_db_option(camp_show)
+
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
     update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
@@ -242,6 +259,97 @@ def _run_export(args: argparse.Namespace, settings: Settings) -> int:
         skipped.append(f"{summary.invalid} invalid value(s)")
     if skipped:
         print("Left out: " + ", ".join(skipped) + ".", file=sys.stderr)
+    return 0
+
+
+def _stamp(when: datetime | None) -> str:
+    return when.strftime("%Y-%m-%d %H:%M") if when else "-"
+
+
+def _run_campaigns(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal import campaigns as camp
+
+    url = args.db or settings.database_url
+    if args.campaigns_action == "build":
+        with _open_database(args, settings)() as db:
+            result = camp.build_campaigns(db)
+        print(
+            f"Built {result.campaigns} campaign(s) covering {result.sessions} of "
+            f"{result.total} session(s)."
+        )
+        return 0
+
+    try:
+        factory = readonly_database(url)
+        with factory() as db:
+            if args.campaigns_action == "list":
+                return _print_campaigns(
+                    camp.list_campaigns(db, limit=args.limit, min_ips=args.min_ips)
+                )
+            try:
+                found = camp.find_campaign(db, args.campaign_id)
+            except ValueError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 2
+            if found is None:
+                print(f"error: no campaign {printable(args.campaign_id)!r}", file=sys.stderr)
+                return 2
+            detail = camp.campaign_detail(db, found)
+            assert detail is not None  # noqa: S101  (it was just found)
+            return _print_campaign(detail)
+    except FileNotFoundError:
+        print(
+            "error: the database does not exist yet; run `surya-kundal ingest` first",
+            file=sys.stderr,
+        )
+        return 2
+
+
+def _print_campaigns(rows: list[CampaignRow]) -> int:
+    if not rows:
+        print("No campaigns yet. Run: surya-kundal campaigns build")
+        return 0
+    print(
+        f"{'CAMPAIGN':<13}{'SESSIONS':>9}{'IPS':>6}  {'FIRST SEEN':<17}{'LAST SEEN':<17}LINKED BY"
+    )
+    for row in rows:
+        why = (
+            f"{row.top_evidence.kind} {printable(row.top_evidence.value, limit=40)}"
+            if row.top_evidence
+            else "-"
+        )
+        print(
+            f"{row.id:<13}{row.sessions:>9}{row.ips:>6}  "
+            f"{_stamp(row.first_seen):<17}{_stamp(row.last_seen):<17}{why}"
+        )
+    return 0
+
+
+def _print_campaign(detail: CampaignDetail) -> int:
+    row = detail.row
+    print(
+        f"Campaign {row.id}: {row.sessions} sessions from {row.ips} address(es), "
+        f"{_stamp(row.first_seen)} to {_stamp(row.last_seen)} UTC"
+    )
+    print("\nWhy these sessions are grouped (what they share):")
+    for item in detail.evidence:
+        print(f"  {item.kind:<9} in {item.sessions:>3} sessions  {printable(item.value, limit=90)}")
+    print("\nAddresses:")
+    for ip, count, country in detail.ips[:10]:
+        print(f"  {printable(ip):<40} {count:>3} session(s)  {printable(country or '-')}")
+    if len(detail.ips) > 10:
+        print(f"  ... and {len(detail.ips) - 10} more")
+    if detail.hassh:
+        print("\nSSH client fingerprints:")
+        for value, count in detail.hassh[:5]:
+            print(f"  {printable(value)}  {count} session(s)")
+    if detail.techniques:
+        print("\nATT&CK techniques:")
+        print("  " + ", ".join(f"{t} ({n})" for t, n in detail.techniques[:15]))
+    if detail.commands:
+        print("\nMost typed commands:")
+        for command, count in detail.commands[:8]:
+            print(f"  {count:>3}x  {printable(command, limit=100)}")
     return 0
 
 
@@ -619,6 +727,7 @@ def main(argv: list[str] | None = None) -> int:
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
         "export": _run_export,
+        "campaigns": _run_campaigns,
         "dashboard": _run_dashboard,
         "doctor": _run_doctor,
     }

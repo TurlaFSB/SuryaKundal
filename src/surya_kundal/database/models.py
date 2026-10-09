@@ -334,3 +334,47 @@ class IngestOffset(Base):
     inode: Mapped[int] = mapped_column(BigInteger)
     offset: Mapped[int] = mapped_column(BigInteger)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class Campaign(Base):
+    """A group of sessions that look like one operation (same tooling, payload or script).
+
+    Derived data: the whole set is rebuilt by ``surya-kundal campaigns build``. The ID comes
+    from the group's earliest session, so it stays the same while new sessions join.
+    """
+
+    __tablename__ = "campaigns"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    first_seen: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    last_seen: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    session_count: Mapped[int] = mapped_column(Integer)
+    ip_count: Mapped[int] = mapped_column(Integer)
+    built_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class CampaignSession(Base):
+    """Which campaign a session belongs to. A session is in at most one."""
+
+    __tablename__ = "campaign_sessions"
+
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+
+
+class CampaignEvidence(Base):
+    """One thing that ties a campaign's sessions together (a file, a URL, a script ...)."""
+
+    __tablename__ = "campaign_evidence"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    value: Mapped[str] = mapped_column(String(300))
+    sessions: Mapped[int] = mapped_column(Integer)

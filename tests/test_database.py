@@ -58,6 +58,9 @@ def test_init_db_creates_expected_tables(engine):
         "session_mappings",
         "technique_matches",
         "uploads",
+        "campaigns",
+        "campaign_sessions",
+        "campaign_evidence",
         "tunnel_requests",
         "alembic_version",
     }
