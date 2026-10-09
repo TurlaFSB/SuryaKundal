@@ -27,6 +27,7 @@ All notable changes to this project are recorded here. The format follows
   of materials per image (kept 90 days). Runs on every change and weekly.
 
 ### Changed
+- Both images build from a base image pinned to an exact digest; Dependabot proposes updates.
 - Every GitHub Action is pinned to a full commit hash (Dependabot keeps them current); a test
   fails if an unpinned action is added.
 - `COWRIE_LOG_DIR` is optional in Compose: unset, the pipeline reads the honeypot container's log.

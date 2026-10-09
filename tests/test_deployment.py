@@ -105,3 +105,11 @@ def test_honeypot_creates_the_directories_cowrie_needs_for_a_shell():
     for needed in ("var/lib/cowrie/tty", "var/lib/cowrie/downloads", "var/log/cowrie"):
         assert needed in entrypoint
         assert needed in COWRIE_DOCKERFILE
+
+
+@pytest.mark.parametrize("text", [DOCKERFILE, COWRIE_DOCKERFILE], ids=["main", "cowrie"])
+def test_base_image_is_pinned_to_a_digest(text):
+    froms = [line for line in text.splitlines() if line.startswith("FROM ")]
+    assert froms
+    for line in froms:
+        assert "@sha256:" in line and ":latest" not in line, line

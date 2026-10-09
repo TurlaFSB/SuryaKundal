@@ -3,10 +3,8 @@
 # Surya Kundal: the analysis pipeline and the dashboard, in one small image.
 # Cowrie itself runs separately; this image only reads its log.
 
-ARG PYTHON_IMAGE=python:3.13-slim-bookworm
-
 # --- build: turn the source into a wheel -------------------------------------
-FROM ${PYTHON_IMAGE} AS build
+FROM python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641 AS build
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
@@ -14,7 +12,7 @@ RUN pip install --no-cache-dir build \
  && python -m build --wheel --outdir /dist
 
 # --- runtime: wheel only, no compilers, no source, no root -------------------
-FROM ${PYTHON_IMAGE} AS runtime
+FROM python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641 AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
