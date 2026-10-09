@@ -1,0 +1,70 @@
+name: Supply chain
+
+# Scans both container images for known vulnerabilities and misconfigurations, and writes a
+# software bill of materials (CycloneDX) for each. Runs on every change and weekly, because
+# new vulnerabilities are published against old images.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  images:
+    name: Scan ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pipeline and dashboard
+            slug: surya-kundal
+            context: .
+          - name: honeypot
+            slug: surya-kundal-cowrie
+            context: cowrie
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - name: Build the image
+        run: docker build --tag ${{ matrix.slug }}:scan ${{ matrix.context }}
+      - name: Fail on fixable high or critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ matrix.slug }}:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+      - name: Write the software bill of materials
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ matrix.slug }}:scan
+          format: cyclonedx
+          output: ${{ matrix.slug }}.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: sbom-${{ matrix.slug }}
+          path: ${{ matrix.slug }}.cdx.json
+          retention-days: 90
+
+  config:
+    name: Scan Dockerfiles and Compose for misconfiguration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          skip-dirs: wazuh,tests

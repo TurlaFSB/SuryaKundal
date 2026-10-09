@@ -22,7 +22,13 @@ All notable changes to this project are recorded here. The format follows
   commit, deception kit applied at every start, persona kept in a volume, unprivileged uid 10002,
   health check that does not create sessions, loopback-only port by default.
 
+- Supply-chain workflow: Trivy scans both images for fixable high and critical vulnerabilities
+  and the Dockerfiles and Compose file for misconfiguration, and writes a CycloneDX software bill
+  of materials per image (kept 90 days). Runs on every change and weekly.
+
 ### Changed
+- Every GitHub Action is pinned to a full commit hash (Dependabot keeps them current); a test
+  fails if an unpinned action is added.
 - `COWRIE_LOG_DIR` is optional in Compose: unset, the pipeline reads the honeypot container's log.
 - Only the pipeline container receives `.env`; the dashboard and honeypot no longer do.
 - The dashboard opens the database read-only at the SQLite level, caches the overview for
