@@ -66,6 +66,12 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--enrich-interval", type=float, default=300.0, help="seconds between enrichment passes"
     )
+    run.add_argument(
+        "--campaign-interval",
+        type=float,
+        default=600.0,
+        help="seconds between campaign regrouping when new sessions arrived",
+    )
 
     ingest = sub.add_parser("ingest", help="import a Cowrie JSON log into the database")
     _add_log_option(ingest)
@@ -535,6 +541,7 @@ def _run_service(args: argparse.Namespace, settings: Settings) -> int:
             interval=args.interval,
             from_end=args.from_end,
             enrich_interval=args.enrich_interval,
+            campaign_interval=args.campaign_interval,
         ).run(stop)
     finally:
         if providers is not None:

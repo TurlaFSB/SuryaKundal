@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from surya_kundal.campaigns import build_campaigns
 from surya_kundal.mapping.store import map_pending
 from surya_kundal.pipeline import Providers, refresh_geoip, run_enrichment
 from surya_kundal.watcher import Watcher
@@ -35,6 +36,7 @@ class Service:
         from_end: bool = False,
         map_interval: float = 5.0,
         enrich_interval: float = 300.0,
+        campaign_interval: float = 600.0,
         abuse_budget: int | None = None,
         vt_budget: int | None = None,
     ) -> None:
@@ -44,6 +46,9 @@ class Service:
         self._interval = interval
         self._map_interval = map_interval
         self._enrich_interval = enrich_interval
+        self._campaign_interval = campaign_interval
+        self._new_data = threading.Event()
+        self._new_data.set()  # group whatever is already stored, once, at startup
         self._budgets = {
             key: value
             for key, value in (("abuse_budget", abuse_budget), ("vt_budget", vt_budget))
@@ -60,6 +65,10 @@ class Service:
                 daemon=True,
             )
             thread.start()
+        campaigns = threading.Thread(
+            target=self._campaign_loop, args=(stop,), name="campaigns", daemon=True
+        )
+        campaigns.start()
         logger.info("Service started")
         dirty = True  # map anything stored before startup, once
         last_map = float("-inf")
@@ -68,6 +77,7 @@ class Service:
                 try:
                     if self._watcher.poll_once() > 0:
                         dirty = True
+                        self._new_data.set()
                     if dirty and time.monotonic() - last_map >= self._map_interval:
                         self._map()
                         dirty, last_map = False, time.monotonic()
@@ -78,6 +88,7 @@ class Service:
             stop.set()
             if thread is not None:
                 thread.join(timeout=30)
+            campaigns.join(timeout=30)
             if dirty:
                 self._map()
             logger.info("Service stopped")
@@ -90,6 +101,26 @@ class Service:
                 logger.info("Mapped %d session(s) to ATT&CK", result.sessions)
         except Exception:
             logger.exception("ATT&CK mapping failed; will retry")
+
+    def _campaign_loop(self, stop: threading.Event) -> None:
+        """Regroup sessions into campaigns when new ones arrived. Its own thread: it must
+        never hold up capture, and it only rewrites derived tables."""
+        while not stop.is_set():
+            if self._new_data.is_set():
+                self._new_data.clear()
+                try:
+                    with self._factory() as db:
+                        result = build_campaigns(db)
+                    logger.info(
+                        "Campaigns: %d covering %d of %d session(s)",
+                        result.campaigns,
+                        result.sessions,
+                        result.total,
+                    )
+                except Exception:
+                    self._new_data.set()  # try again next round
+                    logger.exception("Campaign grouping failed; will retry")
+            stop.wait(self._campaign_interval)
 
     def _enrich_loop(self, providers: Providers, stop: threading.Event) -> None:
         last_geo_refresh = float("-inf")

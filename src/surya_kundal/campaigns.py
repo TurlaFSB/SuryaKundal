@@ -387,6 +387,10 @@ def build_campaigns(db: Session, *, now: datetime | None = None) -> BuildResult:
     sessions = load_facts(db)
     found = cluster(sessions)
     by_id = {s.id: s for s in sessions}
+    # Reading and grouping can take a while. End the read transaction before writing: under
+    # SQLite's WAL mode a transaction that read, then wants to write after another writer
+    # committed in between, is refused as "database is locked".
+    db.rollback()
 
     db.execute(delete(CampaignEvidence))
     db.execute(delete(CampaignSession))

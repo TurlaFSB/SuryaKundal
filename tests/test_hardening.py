@@ -308,3 +308,77 @@ def test_service_without_providers_still_captures_and_maps(tmp_path):
 
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(TechniqueMatch)) > 0
+
+
+def _two_sessions_sharing_a_payload():
+    from sample_events import SHA, T0, T_DL, make_event
+
+    second = [
+        dict(make_event("bbbbbbbbbbbb", "cowrie.session.connect", T0), src_ip="198.51.100.9"),
+        dict(
+            make_event(
+                "bbbbbbbbbbbb",
+                "cowrie.session.file_download",
+                T_DL,
+                url="http://example.com/test/sh",
+                shasum=SHA,
+            ),
+            src_ip="198.51.100.9",
+        ),
+    ]
+    return SESSION_A_EVENTS + second
+
+
+def _run_service_until(tmp_path, ready, **options):
+    factory = _factory(tmp_path)
+    log = tmp_path / "cowrie.json"
+    _append(log, _two_sessions_sharing_a_payload())
+    service = Service(log, factory, providers=None, interval=0.01, map_interval=0.01, **options)
+    stop = threading.Event()
+    thread = threading.Thread(target=service.run, args=(stop,))
+    thread.start()
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not ready(factory):
+        time.sleep(0.05)
+    stop.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    return factory
+
+
+def test_service_groups_sessions_into_campaigns_by_itself(tmp_path):
+    from surya_kundal.database.models import Campaign
+
+    def ready(factory):
+        with factory() as db:
+            return bool(db.scalar(select(func.count()).select_from(Campaign)))
+
+    factory = _run_service_until(tmp_path, ready, campaign_interval=0.05)
+    with factory() as db:
+        campaign = db.scalars(select(Campaign)).one()
+        assert campaign.session_count == 2 and campaign.ip_count == 2
+
+
+def test_service_retries_campaign_grouping_after_a_failure(tmp_path, monkeypatch, caplog):
+    from surya_kundal import service as service_module
+    from surya_kundal.database.models import Campaign
+
+    real = service_module.build_campaigns
+    calls = []
+
+    def flaky(db, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        return real(db, **kwargs)
+
+    monkeypatch.setattr(service_module, "build_campaigns", flaky)
+
+    def ready(factory):
+        with factory() as db:
+            return bool(db.scalar(select(func.count()).select_from(Campaign)))
+
+    with caplog.at_level("ERROR"):
+        _run_service_until(tmp_path, ready, campaign_interval=0.05)
+    assert len(calls) >= 2
+    assert "Campaign grouping failed" in caplog.text
