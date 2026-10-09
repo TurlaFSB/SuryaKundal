@@ -18,8 +18,13 @@ All notable changes to this project are recorded here. The format follows
 - `Dockerfile` and `compose.yaml` for the pipeline and dashboard: unprivileged user, read-only
   root filesystem, no capabilities, resource limits, health checks; policy tests keep it that way.
 - CI job that builds the image and runs it hardened.
+- Cowrie container (`cowrie/Dockerfile`, Compose profile `honeypot`): Cowrie 3.1.1 pinned to a
+  commit, deception kit applied at every start, persona kept in a volume, unprivileged uid 10002,
+  health check that does not create sessions, loopback-only port by default.
 
 ### Changed
+- `COWRIE_LOG_DIR` is optional in Compose: unset, the pipeline reads the honeypot container's log.
+- Only the pipeline container receives `.env`; the dashboard and honeypot no longer do.
 - The dashboard opens the database read-only at the SQLite level, caches the overview for
   15 seconds, throttles wrong passwords per address, refuses unknown `Host` headers when no
   password is set, bounds request sizes, and caps the rows shown for very large sessions.

@@ -87,15 +87,19 @@ surya-kundal dashboard                     # http://127.0.0.1:8080
 
 ### Docker
 
-The pipeline and dashboard also run as hardened containers (unprivileged user, read-only root filesystem, no Linux capabilities, resource limits). Cowrie and Wazuh run separately; the stack only reads Cowrie's JSON log.
+The whole stack runs as hardened containers (unprivileged users, read-only root filesystems, no Linux capabilities, resource limits). Wazuh runs separately.
 
 ```bash
-cp .env.example .env && chmod 600 .env     # set COWRIE_LOG_DIR and DASHBOARD_TOKEN (12+ characters)
-docker compose up -d --build
-docker compose ps                          # both services should become "healthy"
+cp .env.example .env && chmod 600 .env     # set DASHBOARD_TOKEN (12+ characters)
+docker compose --profile honeypot up -d --build
+docker compose ps                          # all three services should become "healthy"
+ssh -p 2222 root@127.0.0.1                 # try the honeypot (weak passwords are accepted on purpose)
 ```
 
-The dashboard is published on `http://127.0.0.1:8080` only; the password is `DASHBOARD_TOKEN`. Data lives in the `surya_data` volume. `docker compose logs -f pipeline` follows the pipeline.
+- **Honeypot (`cowrie`)** is Cowrie 3.1.1, pinned to an exact commit, with the deception kit applied at every start. The persona, host keys and boot time live in the `cowrie_state` volume, so a restart does not change what a scanner sees. It listens on `127.0.0.1:2222` unless you set `COWRIE_BIND`; read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) before exposing it. `COWRIE_POLICY=stealth` accepts three exact logins instead of a few dozen weak ones.
+- **Pipeline and dashboard** read the honeypot's log through a shared read-only volume. To analyse a Cowrie that runs elsewhere, set `COWRIE_LOG_DIR` and omit the profile: `docker compose up -d --build`.
+- Only the pipeline receives `.env` (API keys for enrichment). The honeypot and dashboard get no other secrets.
+- The dashboard is published on `http://127.0.0.1:8080` only; the password is `DASHBOARD_TOKEN`. `docker compose logs -f cowrie` follows the honeypot.
 
 ## Usage
 
@@ -240,7 +244,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); t
 | 4 | MITRE ATT&CK mapping engine | Done |
 | 5 | Wazuh rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Web dashboard | Done |
-| 7 | Docker Compose for the full stack | In progress: pipeline and dashboard containers done; Cowrie container and image scanning next |
+| 7 | Docker Compose for the full stack | In progress: pipeline, dashboard and honeypot containers done; image scanning and SBOM next |
 | 8 | Cloud deployment and real-world data collection | Planned |
 | 9 | Write-up and demonstration | Planned |
 

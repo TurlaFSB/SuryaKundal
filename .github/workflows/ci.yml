@@ -87,7 +87,7 @@ jobs:
       - name: Validate the Compose file
         run: |
           cp .env.example .env
-          DASHBOARD_TOKEN=ci-token-0123456789 COWRIE_LOG_DIR=/tmp docker compose config --quiet
+          DASHBOARD_TOKEN=ci-token-0123456789 docker compose --profile honeypot config --quiet
       - name: Build the image
         run: docker build --tag surya-kundal:ci .
       - name: Run it the way Compose does (unprivileged, read-only, no capabilities)
@@ -97,3 +97,15 @@ jobs:
           docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
             --tmpfs /tmp surya-kundal:ci techniques --db sqlite:////tmp/ci.db
           test "$(docker run --rm --entrypoint id surya-kundal:ci -u)" = "10001"
+      - name: Build the honeypot image and check it becomes healthy, hardened
+        run: |
+          docker build --tag surya-kundal-cowrie:ci cowrie
+          docker run -d --name cw --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp --mount type=volume,target=/cowrie surya-kundal-cowrie:ci
+          for i in $(seq 1 30); do
+            docker exec cw python /opt/kit/healthcheck.py && break
+            sleep 2
+          done
+          docker exec cw python /opt/kit/healthcheck.py
+          test "$(docker exec cw id -u)" = "10002"
+          docker logs cw 2>&1 | tail -15

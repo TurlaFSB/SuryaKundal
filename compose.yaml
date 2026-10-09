@@ -4,9 +4,17 @@
 #   docker compose up -d --build
 #   open http://127.0.0.1:8080                 # password = DASHBOARD_TOKEN
 #
-# Cowrie and Wazuh run separately (see cowrie/ and wazuh/); this stack only reads
-# Cowrie's JSON log. Every container is unprivileged, has a read-only root filesystem,
-# no Linux capabilities, and limits on memory and processes.
+# Without a profile this starts the analysis pipeline and dashboard, which read Cowrie's
+# JSON log from COWRIE_LOG_DIR (a Cowrie running elsewhere) or, if that is unset, from the
+# honeypot container's log volume. To run the honeypot too:
+#
+#   docker compose --profile honeypot up -d --build
+#   ssh -p 2222 root@127.0.0.1                 # COWRIE_BIND defaults to loopback
+#
+# COWRIE_BIND=0.0.0.0 exposes the honeypot to the network: do that only on a host you
+# have prepared for it (see docs/THREAT_MODEL.md). Wazuh runs separately (see wazuh/).
+# Every container is unprivileged, has a read-only root filesystem, no Linux capabilities,
+# and limits on memory and processes.
 
 x-hardened: &hardened
   image: surya-kundal:local
@@ -21,9 +29,6 @@ x-hardened: &hardened
   logging:
     driver: json-file
     options: {max-size: "10m", max-file: "3"}
-  env_file:
-    - path: .env
-      required: false
 
 services:
   pipeline:
@@ -31,6 +36,11 @@ services:
     build: .
     container_name: surya-pipeline
     command: ["run"]
+    # Only the pipeline gets .env (API keys for enrichment). The honeypot faces the internet
+    # and the dashboard needs just its password, so neither receives any other secret.
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Fixed paths inside the container; they win over anything in .env.
       DATABASE_URL: sqlite:////data/surya_kundal.db
@@ -40,13 +50,41 @@ services:
     volumes:
       - surya_data:/data
       # Cowrie's log directory, read-only. A directory (not the single file) survives rotation.
-      - ${COWRIE_LOG_DIR:?set COWRIE_LOG_DIR in .env, e.g. /home/you/cowrie/var/log/cowrie}:/cowrie-log:ro
+      # COWRIE_LOG_DIR points at an existing Cowrie; unset, it is the honeypot container's volume.
+      - ${COWRIE_LOG_DIR:-cowrie_log}:/cowrie-log:ro
     healthcheck:
       test: ["CMD", "surya-kundal", "doctor"]
       interval: 60s
       timeout: 15s
       retries: 3
       start_period: 120s
+
+  cowrie:
+    <<: *hardened
+    profiles: [honeypot]
+    image: surya-kundal-cowrie:local
+    build:
+      context: ./cowrie
+    container_name: surya-cowrie
+    environment:
+      # collect: accepts a few dozen weak root passwords so scanners get in (more data).
+      # stealth: three exact pairs only (hardest to spot, very little data).
+      COWRIE_POLICY: ${COWRIE_POLICY:-collect}
+    ports:
+      # Loopback by default so a test run never exposes the honeypot by accident.
+      - "${COWRIE_BIND:-127.0.0.1}:2222:2222"
+    volumes:
+      # Persona (seed, boot offset), host keys, fake filesystem and downloaded files.
+      - cowrie_state:/cowrie
+      # Nested over the state volume: the JSON log lives in its own volume so the pipeline
+      # can mount it read-only.
+      - cowrie_log:/cowrie/var/log/cowrie
+    healthcheck:
+      test: ["CMD", "python", "/opt/kit/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   dashboard:
     <<: *hardened
@@ -79,3 +117,5 @@ services:
 
 volumes:
   surya_data:
+  cowrie_state:
+  cowrie_log:

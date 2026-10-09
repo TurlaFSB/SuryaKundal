@@ -26,10 +26,29 @@ def test_every_service_is_locked_down(name):
     assert "network_mode" not in service and "pid" not in service
 
 
-def test_only_the_dashboard_publishes_a_port_and_only_on_localhost():
+def test_only_the_dashboard_and_honeypot_publish_ports_and_both_default_to_loopback():
     published = {n: s["ports"] for n, s in SERVICES.items() if "ports" in s}
-    assert set(published) == {"dashboard"}
+    assert set(published) == {"dashboard", "cowrie"}
     assert all(p.startswith("127.0.0.1:") for p in published["dashboard"])
+    # The honeypot is exposed deliberately, by setting COWRIE_BIND, never by default.
+    assert published["cowrie"] == ["${COWRIE_BIND:-127.0.0.1}:2222:2222"]
+
+
+def test_honeypot_is_opt_in_and_gets_no_secrets():
+    cowrie = SERVICES["cowrie"]
+    assert cowrie["profiles"] == ["honeypot"]
+    assert "env_file" not in cowrie  # the internet-facing container must not receive .env
+    assert "env_file" not in SERVICES["dashboard"]
+    assert "env_file" in SERVICES["pipeline"]
+    assert not any("TOKEN" in k or "KEY" in k for k in cowrie["environment"])
+
+
+def test_honeypot_log_reaches_the_pipeline_read_only_through_a_shared_volume():
+    cowrie_mounts = SERVICES["cowrie"]["volumes"]
+    assert "cowrie_log:/cowrie/var/log/cowrie" in cowrie_mounts
+    pipeline_mount = next(v for v in SERVICES["pipeline"]["volumes"] if "/cowrie-log" in v)
+    assert pipeline_mount == "${COWRIE_LOG_DIR:-cowrie_log}:/cowrie-log:ro"
+    assert {"cowrie_state", "cowrie_log"} <= set(COMPOSE["volumes"])
 
 
 def test_secrets_are_not_written_into_the_compose_file():
@@ -62,3 +81,19 @@ def test_dockerignore_keeps_secrets_and_data_out_of_the_build():
     ignored = (ROOT / ".dockerignore").read_text().split()
     for entry in (".env", ".git", "*.db", "*.mmdb", "cowrie.json*", "data"):
         assert entry in ignored
+
+
+COWRIE_DOCKERFILE = (ROOT / "cowrie" / "Dockerfile").read_text()
+
+
+def test_honeypot_image_pins_cowrie_to_a_commit_and_runs_unprivileged():
+    assert "COWRIE_COMMIT=" in COWRIE_DOCKERFILE and "rev-parse HEAD" in COWRIE_DOCKERFILE
+    assert "USER 10002:10002" in COWRIE_DOCKERFILE  # a different uid from the pipeline's 10001
+    assert ":latest" not in COWRIE_DOCKERFILE and "sudo" not in COWRIE_DOCKERFILE
+    assert "ENTRYPOINT" in COWRIE_DOCKERFILE
+
+
+def test_honeypot_healthcheck_does_not_open_ssh_sessions():
+    health = (ROOT / "cowrie" / "healthcheck.py").read_text()
+    assert "socket" not in health  # a connection would be logged as an attacker session
+    assert "/proc/net/tcp" in health
