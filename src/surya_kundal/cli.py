@@ -7,6 +7,7 @@ import logging
 import signal
 import sys
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -117,6 +118,41 @@ def _build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--alerts", type=Path, default=None, help="Wazuh alert export (JSON lines)")
     _add_db_option(dash)
 
+    export = sub.add_parser(
+        "export", help="export indicators of compromise (CSV, STIX 2.1, blocklist, nftables)"
+    )
+    export.add_argument("--format", choices=("csv", "stix", "blocklist", "nftables"), default="csv")
+    export.add_argument("--days", type=int, default=30, help="only what was seen in this many days")
+    export.add_argument(
+        "--min-level",
+        choices=("contact", "guessing", "access", "hands-on", "action"),
+        default="guessing",
+        help="how far an address must have got to be listed (default: guessing)",
+    )
+    export.add_argument(
+        "--types",
+        default="ip,file,url",
+        help="comma-separated: ip, file, url (blocklist formats use ip only)",
+    )
+    export.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="CIDR",
+        help="address or network never to list, e.g. your own (repeatable)",
+    )
+    export.add_argument(
+        "--exclude-file", type=Path, default=None, help="file with one address or network per line"
+    )
+    export.add_argument(
+        "--include-private",
+        action="store_true",
+        help="also list private and local addresses (CSV and STIX only; for lab testing)",
+    )
+    export.add_argument("--author", default="Surya Kundal honeypot", help="STIX identity name")
+    export.add_argument("--output", type=Path, default=None, help="write here instead of stdout")
+    _add_db_option(export)
+
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
     update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
@@ -132,6 +168,79 @@ def _open_database(args: argparse.Namespace, settings: Settings) -> sessionmaker
     engine = create_db_engine(args.db or settings.database_url)
     init_db(engine)
     return make_session_factory(engine)
+
+
+def _run_export(args: argparse.Namespace, settings: Settings) -> int:
+    from sqlalchemy.exc import OperationalError
+
+    from surya_kundal import export as ioc
+
+    if args.include_private and args.format in ("blocklist", "nftables"):
+        print(
+            "error: --include-private is only for CSV and STIX; a blocklist must never "
+            "contain private or local addresses",
+            file=sys.stderr,
+        )
+        return 2
+    types = tuple(part.strip() for part in args.types.split(",") if part.strip())
+    if args.format in ("blocklist", "nftables"):
+        types = ("ip",)
+    entries = list(args.exclude)
+    if args.exclude_file is not None:
+        try:
+            entries += args.exclude_file.read_text(encoding="utf-8").splitlines()
+        except OSError as error:
+            print(f"error: cannot read {args.exclude_file}: {error.strerror}", file=sys.stderr)
+            return 2
+    try:
+        filters = ioc.Filters(
+            days=args.days,
+            min_level=args.min_level,
+            types=types,
+            exclude=ioc.parse_networks(entries),
+            include_private=args.include_private,
+        )
+        factory = readonly_database(args.db or settings.database_url)
+        now = datetime.now(UTC)
+        with factory() as db:
+            indicators, summary = ioc.collect(db, now=now, filters=filters)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    except FileNotFoundError:
+        print(
+            "error: the database does not exist yet; run `surya-kundal ingest` first",
+            file=sys.stderr,
+        )
+        return 2
+    except OperationalError as error:
+        print(f"error: could not read the database: {printable(error.orig)}", file=sys.stderr)
+        return 2
+
+    text = ioc.render(indicators, args.format, now=now, filters=filters, author=args.author)
+    if args.output is None:
+        print(text, end="")
+    else:
+        ioc.write_atomically(args.output, text)
+    kinds = ", ".join(f"{count} {kind}" for kind, count in sorted(summary.counts.items()))
+    print(
+        f"Exported {len(indicators)} indicator(s){f' ({kinds})' if kinds else ''}.", file=sys.stderr
+    )
+    skipped = []
+    if summary.non_public:
+        skipped.append(f"{summary.non_public} private or local address(es)")
+    if summary.excluded:
+        skipped.append(f"{summary.excluded} excluded address(es)")
+    if summary.invalid:
+        skipped.append(f"{summary.invalid} invalid value(s)")
+    if skipped:
+        print("Left out: " + ", ".join(skipped) + ".", file=sys.stderr)
+    return 0
+
+
+def readonly_database(url: str) -> sessionmaker[Session]:
+    """A session factory that cannot write; raises FileNotFoundError if the file is missing."""
+    return make_session_factory(create_db_engine(url, read_only=True))
 
 
 def _run_wazuh_rules(args: argparse.Namespace, settings: Settings) -> int:
@@ -502,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
         "techniques": _run_techniques,
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,
+        "export": _run_export,
         "dashboard": _run_dashboard,
         "doctor": _run_doctor,
     }

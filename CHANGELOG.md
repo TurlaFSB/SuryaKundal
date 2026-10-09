@@ -7,6 +7,10 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `surya-kundal export`: indicators of compromise (addresses, file hashes, URLs) as CSV,
+  STIX 2.1, a plain blocklist, or an nftables script with self-expiring entries. Only public
+  addresses are listed, an allow-list protects your own infrastructure, and values are
+  validated and escaped for each format. Documented in `docs/IOC_EXPORT.md`.
 - Read-only web dashboard (`surya-kundal dashboard`): attack map, session-depth funnel,
   honeypot-check panel, ATT&CK matrix, session drill-down, optional Wazuh alerts.
 - `surya-kundal doctor`: read-only installation check; exit code 1 on failure.
