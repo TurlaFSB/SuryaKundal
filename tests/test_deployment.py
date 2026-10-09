@@ -113,3 +113,8 @@ def test_base_image_is_pinned_to_a_digest(text):
     assert froms
     for line in froms:
         assert "@sha256:" in line and ":latest" not in line, line
+
+
+@pytest.mark.parametrize("text", [DOCKERFILE, COWRIE_DOCKERFILE], ids=["main", "cowrie"])
+def test_runtime_images_ship_no_package_manager(text):
+    assert "pip uninstall -y pip" in text

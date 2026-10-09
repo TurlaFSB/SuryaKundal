@@ -39,7 +39,11 @@ RUN apt-get update \
  && useradd --uid 10002 --gid 10002 --no-create-home --home-dir /cowrie --shell /usr/sbin/nologin cowrie \
  && mkdir -p /cowrie/etc /cowrie/var/log/cowrie /cowrie/var/lib/cowrie/tty /cowrie/var/lib/cowrie/downloads /cowrie/var/run \
  && chown -R 10002:10002 /cowrie
+# No package manager in the runtime image (see the main Dockerfile): remove it from the
+# system Python and from the copied virtualenv.
 COPY --from=build /opt/cowrie-venv /opt/cowrie-venv
+RUN /usr/local/bin/python -m pip uninstall -y pip setuptools wheel \
+ && rm -rf /opt/cowrie-venv/lib/python3.13/site-packages/pip* /opt/cowrie-venv/bin/pip*
 COPY . /opt/kit
 RUN chmod 0755 /opt/kit/deploy.sh /opt/kit/docker-entrypoint.sh /opt/kit/healthcheck.py
 WORKDIR /cowrie

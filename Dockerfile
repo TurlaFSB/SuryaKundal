@@ -32,7 +32,12 @@ RUN groupadd --system --gid 10001 surya \
  && mkdir /data && chown 10001:10001 /data
 
 COPY --from=build /dist/*.whl /tmp/wheel/
-RUN pip install "$(ls /tmp/wheel/*.whl)[dashboard]" && rm -rf /tmp/wheel
+# pip, setuptools and wheel are removed once the app is installed: nothing needs them at
+# runtime, they carry their own bundled copies of libraries that scanners flag, and a
+# compromised process then cannot install tools.
+RUN pip install "$(ls /tmp/wheel/*.whl)[dashboard]" \
+ && rm -rf /tmp/wheel \
+ && pip uninstall -y pip setuptools wheel
 
 USER 10001:10001
 WORKDIR /data
