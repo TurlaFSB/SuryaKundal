@@ -8,7 +8,7 @@ groups sessions by what they share, and shows the reason for every group.
 | Shared | Weight | Why it matters |
 |---|---|---|
 | Downloaded file hash | strong | The same payload |
-| Download URL | strong | The same hosting |
+| Download URL | strong | The same hosting (also an address only attempted, with egress blocked) |
 | Uploaded file hash | strong | The same payload |
 | Script or command sequence (after normalising addresses, numbers and temp names) | strong | The same playbook |
 | Password list of 8 or more entries, same order | medium | The same wordlist |

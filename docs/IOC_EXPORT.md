@@ -41,7 +41,8 @@ An address is listed when it reached at least `--min-level` (default `guessing`)
 
 Confidence rises by 10 (maximum 95) when AbuseIPDB scores the address 50 or higher. For a
 file it is 60 by default, 90 when VirusTotal reports 5 or more malicious engines, 75 for 1
-to 4, and 30 when VirusTotal knows the file and every engine says clean. A URL is 60.
+to 4, and 30 when VirusTotal knows the file and every engine says clean. A URL is 60 when a
+download from it completed and 50 when it was only attempted, which is all you see while egress is blocked.
 
 `--min-confidence` drops anything scored below the number you give it, for example `--min-confidence 60` to keep
 only addresses that ran commands and files that nobody has cleared.

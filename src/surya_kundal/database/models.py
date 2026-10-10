@@ -91,6 +91,11 @@ class HoneypotSession(Base):
         cascade="all, delete-orphan",
         order_by=lambda: (Download.timestamp, Download.id),
     )
+    fetch_attempts: Mapped[list[FetchAttempt]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by=lambda: (FetchAttempt.timestamp, FetchAttempt.id),
+    )
     uploads: Mapped[list[Upload]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
@@ -168,6 +173,31 @@ class Download(Base):
     timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     session: Mapped[HoneypotSession] = relationship(back_populates="downloads")
+
+
+class FetchAttempt(Base):
+    """An address the attacker's commands tried to fetch, whether or not it succeeded.
+
+    Derived from command text by the mapper, so it is rebuilt whenever a session is mapped.
+    With egress blocked no download completes and ``downloads`` stays empty; this keeps the
+    address, which is the useful indicator.
+    """
+
+    __tablename__ = "fetch_attempts"
+    __table_args__ = (
+        UniqueConstraint("session_id", "url", name="uq_fetch_attempt"),
+        Index("ix_fetch_attempts_url", "url"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    url: Mapped[str] = mapped_column(Text)
+    tool: Mapped[str] = mapped_column(String(16), default="")
+    timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    session: Mapped[HoneypotSession] = relationship(back_populates="fetch_attempts")
 
 
 class Upload(Base):

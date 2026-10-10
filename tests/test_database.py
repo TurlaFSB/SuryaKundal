@@ -61,6 +61,7 @@ def test_init_db_creates_expected_tables(engine):
         "campaigns",
         "campaign_sessions",
         "campaign_evidence",
+        "fetch_attempts",
         "tunnel_requests",
         "alembic_version",
     }

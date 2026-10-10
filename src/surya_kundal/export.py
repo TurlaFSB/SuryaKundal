@@ -48,12 +48,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, func, select, union
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
     Command,
     Download,
+    FetchAttempt,
     FileIntel,
     HoneypotSession,
     IpGeo,
@@ -272,7 +273,12 @@ def _address_indicators(
 
     accepted = sessions_with(Login, Login.success.is_(True))
     hands_on = sessions_with(Command)
-    acted = sessions_with(Download) | sessions_with(Upload) | sessions_with(TunnelRequest)
+    acted = (
+        sessions_with(Download)
+        | sessions_with(Upload)
+        | sessions_with(TunnelRequest)
+        | sessions_with(FetchAttempt)
+    )
 
     failed: dict[str, int] = {}
     for raw, count in db.execute(
@@ -465,15 +471,22 @@ def _file_indicators(
 def _url_indicators(
     db: Session, since: datetime, now: datetime, summary: Summary
 ) -> list[Indicator]:
+    """Addresses downloaded or only attempted (egress blocked); one count per session."""
+    seen = union(
+        select(Download.url.label("url"), Download.session_id.label("sid")).where(
+            Download.url.is_not(None)
+        ),
+        select(FetchAttempt.url.label("url"), FetchAttempt.session_id.label("sid")),
+    ).subquery()
     rows = db.execute(
         select(
-            Download.url,
+            seen.c.url,
             func.max(HoneypotSession.start_time),
             func.count(HoneypotSession.id.distinct()),
         )
-        .join(HoneypotSession, HoneypotSession.id == Download.session_id)
-        .where(Download.url.is_not(None), HoneypotSession.start_time >= since)
-        .group_by(Download.url)
+        .join(HoneypotSession, HoneypotSession.id == seen.c.sid)
+        .where(HoneypotSession.start_time >= since)
+        .group_by(seen.c.url)
     ).all()
     good: list[tuple[str, datetime, int]] = []
     for url, last, count in rows:
@@ -482,15 +495,19 @@ def _url_indicators(
         else:
             summary.invalid += 1
     first_ever: dict[str, datetime] = {}
+    fetched: set[str] = set()
     for part in _chunks([url for url, _, _ in good]):
-        for seen_url, first in db.execute(
-            select(Download.url, func.min(HoneypotSession.start_time))
-            .join(HoneypotSession, HoneypotSession.id == Download.session_id)
-            .where(Download.url.in_(part), HoneypotSession.start_time.is_not(None))
-            .group_by(Download.url)
-        ):
-            if seen_url is not None and first is not None:
-                first_ever[seen_url] = first
+        for model in (Download, FetchAttempt):
+            for seen_url, first in db.execute(
+                select(model.url, func.min(HoneypotSession.start_time))
+                .join(HoneypotSession, HoneypotSession.id == model.session_id)
+                .where(model.url.in_(part), HoneypotSession.start_time.is_not(None))
+                .group_by(model.url)
+            ):
+                if seen_url is not None and first is not None:
+                    first_ever[seen_url] = min(first_ever.get(seen_url, first), first)
+                    if model is Download:
+                        fetched.add(seen_url)
     return [
         Indicator(
             kind="url",
@@ -498,7 +515,7 @@ def _url_indicators(
             first_seen=_aware(first_ever.get(url)) or _aware(last) or now,
             last_seen=_aware(last) or now,
             sessions=count,
-            confidence=60,
+            confidence=60 if url in fetched else 50,  # attempted only: never seen to deliver
         )
         for url, last, count in good
     ]

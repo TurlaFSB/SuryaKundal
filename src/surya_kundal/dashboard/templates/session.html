@@ -50,6 +50,16 @@
 </section>
 {% endif %}
 
+{% if d.attempts %}
+<section class="panel">
+  <h2>Attempted downloads</h2>
+  <p class="muted">Addresses the commands tried to fetch. With egress blocked nothing is retrieved, so no file or hash exists.</p>
+  <table><thead><tr><th>Tool</th><th>Address</th></tr></thead><tbody>
+  {% for a in d.attempts %}<tr><td>{{ a.tool | p }}</td><td><code>{{ a.url | p(limit=200) }}</code></td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+
 {% if d.tunnels %}
 <section class="panel">
   <h2>Port-forward requests</h2>

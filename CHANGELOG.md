@@ -7,6 +7,13 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Attempted downloads: with egress blocked no download completes, so Cowrie logs no file and no hash and
+  the address was only in the command text. The mapper now reads fetch addresses out of commands
+  (`wget`, `curl`, `tftp`, `busybox ftpget`, `git clone`, also behind `sudo`, `sh -c`, `cd x &&`;
+  never anything built from variables, and `echo wget ...` is not a fetch) into a new
+  `fetch_attempts` table (migration 0009). They show on the session page, link sessions into campaigns
+  exactly like completed downloads, and appear in the IOC export as URLs (confidence 50, against 60 for
+  a completed download). Existing sessions are re-mapped once after the upgrade.
 - Egress control for the honeypot (`cowrie/egress.sh`, `docs/EGRESS.md`): the honeypot container gets
   its own Docker bridge, and a host firewall stops it opening connections to the internet (`deny`, the
   default) or limits it to rate-limited web traffic to public addresses (`captures`). In both modes the

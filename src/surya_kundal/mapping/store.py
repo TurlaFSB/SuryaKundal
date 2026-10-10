@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from surya_kundal.database.models import (
     Command,
     Download,
+    FetchAttempt,
     HoneypotSession,
     Login,
     SessionMapping,
@@ -29,6 +30,7 @@ from surya_kundal.mapping.engine import (
     map_transfers,
     map_tunnels,
 )
+from surya_kundal.mapping.fetches import extract
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +110,23 @@ def map_session(db: Session, session_id: str, ruleset: RuleSet | None = None) ->
     for match in map_tunnels(tunnels):
         add(match)
 
+    attempts: dict[str, FetchAttempt] = {}
+    for command in session.commands:
+        for fetch in extract(command.command):
+            attempts.setdefault(
+                fetch.url,
+                FetchAttempt(
+                    session_id=session_id,
+                    url=fetch.url,
+                    tool=fetch.tool,
+                    timestamp=command.timestamp,
+                ),
+            )
+
     db.execute(delete(TechniqueMatch).where(TechniqueMatch.session_id == session_id))
+    db.execute(delete(FetchAttempt).where(FetchAttempt.session_id == session_id))
     db.add_all(rows)
+    db.add_all(attempts.values())
     mapping = db.get(SessionMapping, session_id) or SessionMapping(session_id=session_id)
     mapping.ruleset_version = ruleset.version
     mapping.attack_version = catalog.version

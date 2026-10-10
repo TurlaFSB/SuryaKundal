@@ -64,6 +64,7 @@ from surya_kundal.database.models import (
     CampaignSession,
     Command,
     Download,
+    FetchAttempt,
     HoneypotSession,
     Login,
     TunnelRequest,
@@ -368,6 +369,10 @@ def load_facts(db: Session) -> list[SessionFacts]:
             item.urls.add(url)
         if sha:
             item.files.add(sha.lower())
+    for sid, url in db.execute(select(FetchAttempt.session_id, FetchAttempt.url)):
+        item = facts.get(sid)
+        if item is not None:
+            item.urls.add(url)
     for sid, sha in db.execute(select(Upload.session_id, Upload.sha256)):
         item = facts.get(sid)
         if item is not None and sha:

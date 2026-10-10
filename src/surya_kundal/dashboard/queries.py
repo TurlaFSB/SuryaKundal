@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from surya_kundal.database.models import (
     Command,
     Download,
+    FetchAttempt,
     FileIntel,
     HoneypotSession,
     IpGeo,
@@ -173,6 +174,7 @@ class SessionDetail:
     command_total: int
     session_matches: list[TechniqueMatch]
     files: list[FileView]
+    attempts: list[FetchAttempt]
     tunnels: list[TunnelRequest]
     techniques: list[TechniqueCount] = field(default_factory=list)
 
@@ -503,6 +505,7 @@ def session_detail(db: Session, prefix: str) -> SessionDetail | None:
     commands = limited(Command, (Command.timestamp, Command.id), MAX_COMMANDS_SHOWN)
     downloads = limited(Download, (Download.timestamp, Download.id), MAX_FILES_SHOWN)
     uploads = limited(Upload, (Upload.timestamp, Upload.id), MAX_FILES_SHOWN)
+    attempts = limited(FetchAttempt, (FetchAttempt.timestamp, FetchAttempt.id), MAX_FILES_SHOWN)
     tunnels = limited(TunnelRequest, (TunnelRequest.timestamp, TunnelRequest.id), MAX_FILES_SHOWN)
 
     matches = db.scalars(
@@ -557,5 +560,6 @@ def session_detail(db: Session, prefix: str) -> SessionDetail | None:
         command_total=total(Command),
         session_matches=by_command.get(None, []),
         files=files,
+        attempts=attempts,
         tunnels=tunnels,
     )
