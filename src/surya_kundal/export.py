@@ -64,6 +64,8 @@ from surya_kundal.database.models import (
     TunnelRequest,
     Upload,
 )
+from surya_kundal.hosts import is_common_host, usable_host
+from surya_kundal.internal import is_internal
 from surya_kundal.textsafe import printable
 
 LEVELS = ("contact", "guessing", "access", "hands-on", "action")
@@ -78,7 +80,7 @@ MAX_URL_LENGTH = 2048
 MAX_TECHNIQUES = 20
 CHUNK = 500
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-_URL_SCHEMES = ("http", "https", "ftp")
+_URL_SCHEMES = ("http", "https", "ftp", "tftp")
 _FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
 
 # Fixed namespace so the same indicator always gets the same STIX ID. Importers update
@@ -125,6 +127,7 @@ class Indicator:
     vt_engines: int | None = None
     techniques: tuple[str, ...] = ()
     detail: str = ""
+    attempted: bool = False  # URLs only: typed in a command, never seen delivering a file
 
     @property
     def is_address(self) -> bool:
@@ -138,6 +141,8 @@ class Summary:
     non_public: int = 0
     excluded: int = 0
     invalid: int = 0
+    common: int = 0  # URLs on look-up services, popular sites or mirrors
+    unverified: int = 0  # attempted-only URLs seen from too few source addresses
     counts: dict[str, int] = field(default_factory=dict)
 
 
@@ -149,6 +154,9 @@ class Filters:
     exclude: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
     include_private: bool = False
     min_confidence: int = 0
+    # A URL that was only typed in a command (never downloaded) is listed only when at least
+    # this many different source addresses typed it; 0 lists every one. Anyone can type any URL.
+    attempted_min_sources: int = 3
 
 
 # --- parsing and validation ----------------------------------------------------
@@ -197,10 +205,12 @@ def valid_url(url: str | None) -> bool:
         return False
     if parts.scheme not in _URL_SCHEMES or not host:
         return False
-    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+    if "@" in parts.netloc or not usable_host(host):
+        return False
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".localdomain")):
         return False
     address = normalise_ip(host)
-    return address is None or address.is_global
+    return address is None or (address.is_global and not address.is_multicast)
 
 
 # --- collecting ------------------------------------------------------------------
@@ -473,9 +483,14 @@ def _file_indicators(
 
 
 def _url_indicators(
-    db: Session, since: datetime, now: datetime, summary: Summary
+    db: Session, since: datetime, now: datetime, filters: Filters, summary: Summary
 ) -> list[Indicator]:
-    """Addresses downloaded or only attempted (egress blocked); one count per session."""
+    """Addresses downloaded from, plus addresses only typed into commands (egress blocked).
+
+    Anyone can type any address, so a typed-only address is listed only when several different
+    source addresses typed it, and it is labelled as unverified. Look-up services, popular
+    sites, your own addresses and anything matching ``--exclude`` are never listed.
+    """
     seen = union(
         select(Download.url.label("url"), Download.session_id.label("sid")).where(
             Download.url.is_not(None)
@@ -487,20 +502,32 @@ def _url_indicators(
             seen.c.url,
             func.max(HoneypotSession.start_time),
             func.count(HoneypotSession.id.distinct()),
+            func.count(HoneypotSession.src_ip.distinct()),
         )
         .join(HoneypotSession, HoneypotSession.id == seen.c.sid)
         .where(HoneypotSession.start_time >= since, HoneypotSession.internal.is_(False))
         .group_by(seen.c.url)
     ).all()
-    good: list[tuple[str, datetime, int]] = []
-    for url, last, count in rows:
-        if url is not None and valid_url(url) and last is not None:
-            good.append((url, last, count))
-        else:
+    good: list[tuple[str, datetime, int, int]] = []
+    for url, last, count, sources in rows:
+        if url is None or last is None or not valid_url(url):
             summary.invalid += 1
+            continue
+        host = urlsplit(url).hostname or ""
+        if is_common_host(host):
+            summary.common += 1
+            continue
+        address = normalise_ip(host)
+        if address is not None and (
+            is_internal(str(address))
+            or any(address.version == net.version and address in net for net in filters.exclude)
+        ):
+            summary.excluded += 1
+            continue
+        good.append((url, last, count, sources))
     first_ever: dict[str, datetime] = {}
     fetched: set[str] = set()
-    for part in _chunks([url for url, _, _ in good]):
+    for part in _chunks([url for url, _, _, _ in good]):
         for model in (Download, FetchAttempt):
             for seen_url, first in db.execute(
                 select(model.url, func.min(HoneypotSession.start_time))
@@ -512,17 +539,25 @@ def _url_indicators(
                     first_ever[seen_url] = min(first_ever.get(seen_url, first), first)
                     if model is Download:
                         fetched.add(seen_url)
-    return [
-        Indicator(
-            kind="url",
-            value=url,
-            first_seen=_aware(first_ever.get(url)) or _aware(last) or now,
-            last_seen=_aware(last) or now,
-            sessions=count,
-            confidence=60 if url in fetched else 50,  # attempted only: never seen to deliver
+    result: list[Indicator] = []
+    for url, last, count, sources in good:
+        attempted = url not in fetched
+        if attempted and sources < filters.attempted_min_sources:
+            summary.unverified += 1
+            continue
+        result.append(
+            Indicator(
+                kind="url",
+                value=url,
+                first_seen=_aware(first_ever.get(url)) or _aware(last) or now,
+                last_seen=_aware(last) or now,
+                sessions=count,
+                confidence=40 if attempted else 60,
+                detail="typed in commands; never seen delivering a file" if attempted else "",
+                attempted=attempted,
+            )
         )
-        for url, last, count in good
-    ]
+    return result
 
 
 def collect(
@@ -536,6 +571,8 @@ def collect(
         raise ValueError("days must be at least 1")
     if not 0 <= filters.min_confidence <= 100:
         raise ValueError("min-confidence must be between 0 and 100")
+    if filters.attempted_min_sources < 0:
+        raise ValueError("attempted-min-sources cannot be negative")
     unknown = set(filters.types) - set(TYPES)
     if unknown:
         raise ValueError(f"unknown type(s): {', '.join(sorted(unknown))}")
@@ -549,7 +586,7 @@ def collect(
     if "file" in filters.types:
         indicators += _file_indicators(db, since, now, summary)
     if "url" in filters.types:
-        indicators += _url_indicators(db, since, now, summary)
+        indicators += _url_indicators(db, since, now, filters, summary)
 
     order = {"ipv4": 0, "ipv6": 1, "sha256": 2, "url": 3}
     indicators = [i for i in indicators if i.confidence >= filters.min_confidence]
@@ -708,6 +745,11 @@ def _description(item: Indicator) -> str:
         if item.vt_engines:
             text += f" VirusTotal: {item.vt_malicious or 0} of {item.vt_engines} engines flag it."
         return text
+    if item.attempted:
+        return (
+            f"URL typed into commands in {where} on an SSH honeypot. The honeypot blocked the "
+            "download, so nothing was seen delivered from it: unverified, review before blocking."
+        )
     return f"URL an attacker downloaded from, seen in {where} on an SSH honeypot."
 
 
@@ -716,7 +758,7 @@ def _title(item: Indicator) -> str:
         return f"Hostile SSH client {item.value}"
     if item.kind == "sha256":
         return f"Attacker file {item.value[:16]}"
-    return "Malware download URL"
+    return "URL attackers tried to fetch (unverified)" if item.attempted else "Malware download URL"
 
 
 def to_stix(
@@ -754,7 +796,9 @@ def to_stix(
             "description": _description(item),
             "indicator_types": [
                 "malicious-activity"
-                if item.kind in ("sha256", "url") or item.level in ("hands-on", "action")
+                if item.kind == "sha256"
+                or (item.kind == "url" and not item.attempted)
+                or item.level in ("hands-on", "action")
                 else "anomalous-activity"
             ],
             "pattern": pattern,

@@ -150,11 +150,15 @@ def test_export_skips_internal_sessions_including_listed_addresses(db, monkeypat
     add(db, "b", "80.66.76.11")
     map_pending(db)
     now = T0 + timedelta(days=1)
-    both, _ = ioc.collect(db, now=now, filters=ioc.Filters(types=("ip", "url")))
+    both, _ = ioc.collect(
+        db, now=now, filters=ioc.Filters(types=("ip", "url"), attempted_min_sources=1)
+    )
     assert {i.value for i in both if i.kind != "url"} == {"80.66.76.10", "80.66.76.11"}
     monkeypatch.setenv("INTERNAL_NETWORKS", "80.66.76.10")
     assert reclassify(db) == (1, 1, 2)
-    after, _ = ioc.collect(db, now=now, filters=ioc.Filters(types=("ip", "url")))
+    after, _ = ioc.collect(
+        db, now=now, filters=ioc.Filters(types=("ip", "url"), attempted_min_sources=1)
+    )
     assert {i.value for i in after if i.kind != "url"} == {"80.66.76.11"}
     assert [i.sessions for i in after if i.kind == "url"] == [1]  # session b only (attempts)
 

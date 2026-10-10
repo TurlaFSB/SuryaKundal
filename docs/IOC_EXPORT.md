@@ -42,10 +42,25 @@ An address is listed when it reached at least `--min-level` (default `guessing`)
 Confidence rises by 10 (maximum 95) when AbuseIPDB scores the address 50 or higher. For a
 file it is 60 by default, 90 when VirusTotal reports 5 or more malicious engines, 75 for 1
 to 4, and 30 when VirusTotal knows the file and every engine says clean. A URL is 60 when a
-download from it completed and 50 when it was only attempted, which is all you see while egress is blocked.
+download from it completed and 40 when it was only typed into a command, which is all you see while egress is blocked.
 
 `--min-confidence` drops anything scored below the number you give it, for example `--min-confidence 60` to keep
 only addresses that ran commands and files that nobody has cleared.
+
+## URLs that were only typed
+
+With egress blocked nothing is ever downloaded, so a URL comes only from what attackers typed. Anyone
+can type any address (`curl google.com`), so these are handled with care:
+
+- A typed-only URL is listed only when at least 3 different source addresses typed it
+  (`--attempted-min-sources N`, `0` lists all). It carries confidence 40, the STIX type
+  `anomalous-activity`, the title "URL attackers tried to fetch (unverified)" and, in the CSV, the
+  detail "typed in commands; never seen delivering a file". Review these before blocking anything.
+- Look-up services, popular sites and package mirrors (ifconfig.me, ipinfo.io, google.com, github's
+  hosts for the host itself, and similar; the list is `COMMON_HOSTS` in `src/surya_kundal/hosts.py`)
+  are never listed, however often they appear.
+- URLs on your own addresses (`INTERNAL_NETWORKS`) or inside `--exclude` are never listed.
+- Disguised hosts (`127.1`, `2130706433`, `router`, `10.0.0.1.nip.io`, `name@host`) are refused.
 
 ## Safety rules
 

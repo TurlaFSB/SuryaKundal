@@ -70,13 +70,15 @@ from surya_kundal.database.models import (
     TunnelRequest,
     Upload,
 )
+from surya_kundal.hosts import is_common_host, is_shared_hosting
 
 logger = logging.getLogger(__name__)
 
 LINK_THRESHOLD = 5.0
 MAX_WEAK_GROUP = 25  # a weak feature shared by more sessions than this describes a popular tool
 MAX_PAIRS = 2_000_000  # memory guard for weak-feature pairs; rarest features are used first
-MAX_COMMANDS_PER_SESSION = 200
+MAX_COMMANDS_PER_SESSION = 60  # per session, and each cut to MAX_COMMAND_CHARS: bounds memory
+MAX_COMMAND_CHARS = 400
 MAX_CREDENTIALS_PER_SESSION = 30
 MAX_EVIDENCE = 12
 CREDLIST_MIN = 8  # attempts before the order of the list is distinctive
@@ -156,7 +158,9 @@ def _clean_url(url: str) -> str | None:
         port = parts.port
     except ValueError:
         return None
-    if parts.scheme not in ("http", "https", "ftp") or not host:
+    if parts.scheme not in ("http", "https", "ftp", "tftp") or not host:
+        return None
+    if is_common_host(host):  # look-up services and popular sites say nothing about an operator
         return None
     netloc = host.lower() + (f":{port}" if port else "")
     return f"{parts.scheme}://{netloc}{parts.path}"[: KIND_LIMIT["url"]]
@@ -177,9 +181,10 @@ def features_of(facts: SessionFacts) -> dict[str, float]:
         if cleaned is None:
             continue
         add("url", cleaned, 5)
-        host = urlsplit(cleaned).netloc
-        if host:
-            add("host", host, 3)
+        parts = urlsplit(cleaned)
+        # Anyone can publish on a shared host, so the host alone links nobody.
+        if parts.netloc and not is_shared_hosting(parts.hostname or ""):
+            add("host", parts.netloc, 3)
     for tunnel in facts.tunnels:
         add("tunnel", tunnel, 4)
     if facts.hassh:
@@ -350,7 +355,7 @@ def load_facts(db: Session, *, include_internal: bool = False) -> list[SessionFa
     ).yield_per(5000):
         item = facts.get(sid)
         if item is not None and len(item.commands) < MAX_COMMANDS_PER_SESSION:
-            item.commands.append(command)
+            item.commands.append(command[:MAX_COMMAND_CHARS])
 
     for sid, user, password in db.execute(
         select(Login.session_id, Login.username, Login.password).order_by(

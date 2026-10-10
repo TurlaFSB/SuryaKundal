@@ -6,6 +6,17 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Ingestion no longer stops on odd log content: every field is type-checked and size-capped, one
+  session that fails cannot affect the others, and a locked database retries the whole batch
+  instead of waiting out the lock once per session. Lines of deep nesting or digit floods are skipped.
+- Shell redirects (`echo x > file`) are no longer counted as downloads, which inflated statistics, the
+  export and the VirusTotal quota.
+- The IOC export no longer lists innocent addresses: look-up services and popular sites are never
+  listed, disguised local hosts are refused, URLs only typed in commands need 3 different sources and
+  are labelled unverified, and `--exclude` and `INTERNAL_NETWORKS` apply to URLs. Campaigns ignore the
+  same hosts, and the campaign rebuild uses less memory.
+
 ### Added
 - `docs/DEPLOYMENT_AWS.md`: ordered, checked steps for a single-server deployment (honeypot on port 22,
   administration moved to 22222 from one address, metadata service locked, egress control, dashboard

@@ -149,6 +149,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="leave out indicators below this confidence, 0 to 100 (default: 0)",
     )
     export.add_argument(
+        "--attempted-min-sources",
+        type=int,
+        default=3,
+        metavar="N",
+        help="list a URL that was only typed in commands (never downloaded) when at least N "
+        "different addresses typed it; 0 lists them all (default: 3)",
+    )
+    export.add_argument(
         "--types",
         default="ip,file,url",
         help="comma-separated: ip, file, url (blocklist formats use ip only)",
@@ -267,6 +275,7 @@ def _run_export(args: argparse.Namespace, settings: Settings) -> int:
             exclude=ioc.parse_networks(entries),
             include_private=args.include_private,
             min_confidence=args.min_confidence,
+            attempted_min_sources=args.attempted_min_sources,
         )
         factory = readonly_database(args.db or settings.database_url)
         now = datetime.now(UTC)
@@ -301,6 +310,13 @@ def _run_export(args: argparse.Namespace, settings: Settings) -> int:
         skipped.append(f"{summary.excluded} excluded address(es)")
     if summary.invalid:
         skipped.append(f"{summary.invalid} invalid value(s)")
+    if summary.common:
+        skipped.append(f"{summary.common} URL(s) on look-up services or popular sites")
+    if summary.unverified:
+        skipped.append(
+            f"{summary.unverified} typed-only URL(s) seen from fewer than "
+            f"{args.attempted_min_sources} addresses"
+        )
     if skipped:
         print("Left out: " + ", ".join(skipped) + ".", file=sys.stderr)
     return 0
