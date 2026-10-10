@@ -198,9 +198,10 @@ def create_app(
         """Every page carries the global session count, so the "new activity" banner is exact."""
         try:
             count = queries.pulse(db())[0] if queries.has_data(db()) else 0
+            hidden = queries.hidden_internal(db()) if count else 0
         except Exception:  # a page must still render if the count cannot be read
-            count = 0
-        return {"pulse_count": count}
+            count = hidden = 0
+        return {"pulse_count": count, "hidden_internal": hidden}
 
     def page(template: str, build: Callable[[Session], dict[str, Any]]) -> str:
         """Render ``template`` with ``build(db)``; guide the user if nothing exists yet."""

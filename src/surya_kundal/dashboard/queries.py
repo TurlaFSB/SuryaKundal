@@ -54,6 +54,16 @@ def show_internal(show: bool) -> None:
     _include_internal.set(show)
 
 
+def hidden_internal(db: Session) -> int:
+    """How many of the operator's own sessions are being left out right now."""
+    if _include_internal.get():
+        return 0
+    query = (
+        select(func.count()).select_from(HoneypotSession).where(HoneypotSession.internal.is_(True))
+    )
+    return int(db.scalar(query) or 0)
+
+
 def _real() -> ColumnElement[bool]:
     """Condition on sessions: attackers only, unless internal traffic was asked for."""
     return true() if _include_internal.get() else HoneypotSession.internal.is_(False)

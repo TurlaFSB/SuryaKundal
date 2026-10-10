@@ -171,3 +171,15 @@ def test_reclassify_command(tmp_path, monkeypatch, capsys):
     assert "1 of 1 session(s) are internal; 1 changed" in capsys.readouterr().out
     monkeypatch.setenv("INTERNAL_NETWORKS", "nonsense")
     assert main(["reclassify", "--db", url]) == 2
+
+
+def test_pages_say_how_many_internal_sessions_are_hidden(tmp_path):
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'h.db'}")
+    init_db(engine)
+    factory = make_session_factory(engine)
+    with factory() as session:
+        add(session, "aaaaaaaa1", "172.29.77.1")
+    page = create_app(factory).test_client().get("/").get_data(as_text=True)
+    assert "1 internal session (your own tests" in page
+    shown = create_app(factory, show_internal=True).test_client().get("/").get_data(as_text=True)
+    assert "internal session" not in shown
