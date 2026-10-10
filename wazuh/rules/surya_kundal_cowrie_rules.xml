@@ -313,7 +313,7 @@
 
   <rule id="100659" level="10">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">((\brm\b|\btruncate\b|\bshred\b|&gt;)\s*[^|;&amp;&lt;&gt;]*?/var/log/\S*|\b(rm|truncate|shred)\b.*\b(wtmp|btmp|lastlog|utmp)\b|\bjournalctl\s+--(vacuum|rotate)|\blogrotate\s+-f)</field>
+    <field name="input" type="pcre2">((\brm\b|\btruncate\b|\bshred\b|&gt;)\s*[^|;&amp;&lt;&gt;]{0,256}?/var/log/\S*|\b(rm|truncate|shred)\b.{0,256}\b(wtmp|btmp|lastlog|utmp)\b|\bjournalctl\s+--(vacuum|rotate)|\blogrotate\s+-f)</field>
     <description>Cowrie: Deleting or truncating system logs [evasion-clear-logs]</description>
     <mitre><id>T1685.006</id></mitre>
     <group>command,</group>
@@ -537,7 +537,7 @@
 
   <rule id="100604" level="6">
     <if_sid>100520</if_sid>
-    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(curl|wget)\s+.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)</field>
+    <field name="input" type="pcre2">(?:^|[;&amp;|]\s*+)(?:(?:sudo|nohup|env|time|exec)\s++)*+(curl|wget)\s+.{0,300}(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)</field>
     <description>Cowrie: Checking the host's public IP or internet reachability [discovery-external-ip]</description>
     <mitre><id>T1016.001</id></mitre>
     <group>command,discovery,</group>

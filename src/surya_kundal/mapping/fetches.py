@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-FETCH_REVISION = "1"  # bump when extraction changes, so stored sessions are read again
+FETCH_REVISION = "2"  # bump when extraction changes, so stored sessions are read again
 
 MAX_COMMAND_LENGTH = 20_000
 MAX_PER_COMMAND = 20
@@ -152,10 +152,14 @@ def _positionals(args: list[str]) -> list[str]:
 def _tftp(args: list[str]) -> list[str]:
     tokens = [_clean(t) for t in args]
     remote = ""
+    files: set[str] = set()  # file names, which can look like host names ("bins.sh")
     for index, word in enumerate(tokens[:-1]):
+        if word in ("-r", "-l", "get", "put"):
+            files.add(tokens[index + 1])
         if word == "-r" or (word == "get" and not remote):
             remote = tokens[index + 1]
-    hosts = [t for t in _positionals(args) if _HOST.match(t)]
+    hosts = [t for t in _positionals(args) if _HOST.match(t) and t not in files]
+    hosts.sort(key=lambda t: 0 if re.fullmatch(_IPV4 + _PORT, t) else 1)  # an address beats a name
     if not hosts or not _literal(remote):
         return []
     return [f"tftp://{hosts[0]}/{remote.lstrip('/')}"]

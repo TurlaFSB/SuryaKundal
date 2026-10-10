@@ -246,7 +246,7 @@ def _address_indicators(
         if address is None or last is None:
             summary.invalid += 1
             continue
-        if not filters.include_private and not address.is_global:
+        if not filters.include_private and not (address.is_global and not address.is_multicast):
             summary.non_public += 1
             continue
         if any(address in network for network in filters.exclude):

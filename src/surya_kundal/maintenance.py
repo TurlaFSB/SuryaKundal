@@ -112,7 +112,8 @@ def verify_backup(path: Path) -> Verification:
         raise MaintenanceError(f"backup not found: {path}")
     if path.suffix != ".gz":
         return verify_file(path)
-    with tempfile.TemporaryDirectory(prefix="sk-verify-") as scratch:
+    # next to the backup, not in /tmp: the container's /tmp is a small memory-backed area
+    with tempfile.TemporaryDirectory(prefix=".sk-verify-", dir=path.parent) as scratch:
         plain = Path(scratch) / "backup.db"
         try:
             with gzip.open(path, "rb") as src, plain.open("wb") as dst:
@@ -332,10 +333,17 @@ def vacuum(url: str) -> tuple[int, int]:
     """Return freed space to the filesystem. Returns the file size before and after."""
     path = sqlite_file(url)
     before = path.stat().st_size
+    # VACUUM writes a full temporary copy; keep it beside the database, not in a small /tmp.
+    previous = os.environ.get("SQLITE_TMPDIR")
+    os.environ["SQLITE_TMPDIR"] = str(path.parent)
     conn = sqlite3.connect(path, timeout=30)
     try:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.execute("VACUUM")
     finally:
         conn.close()
+        if previous is None:
+            os.environ.pop("SQLITE_TMPDIR", None)
+        else:
+            os.environ["SQLITE_TMPDIR"] = previous
     return before, path.stat().st_size

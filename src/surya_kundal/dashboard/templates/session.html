@@ -16,14 +16,14 @@
 {% if d.session_matches %}
 <section class="panel">
   <h2>Session-level techniques</h2>
-  <p>{% for m in d.session_matches %}<span class="tag" title="{{ m.evidence | p }}">{{ m.technique_id | p }}</span> {% endfor %}</p>
+  <p>{% for m in d.session_matches %}<span class="tag" title="{{ m.evidence | p(limit=300) }}">{{ m.technique_id | p }}</span> {% endfor %}</p>
 </section>
 {% endif %}
 
 <section class="panel">
   <h2>Logins <span class="pill">{{ d.login_total }}</span></h2>
   <table><thead><tr><th>Result</th><th>User</th><th>Password</th></tr></thead><tbody>
-  {% for l in d.logins %}<tr><td>{{ 'accepted' if l.success else 'refused' }}</td><td>{{ l.username | p }}</td><td>{{ l.password | p }}</td></tr>
+  {% for l in d.logins %}<tr><td>{{ 'accepted' if l.success else 'refused' }}</td><td>{{ l.username | p(limit=128) }}</td><td>{{ l.password | p(limit=128) }}</td></tr>
   {% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
   </tbody></table>
   {% if d.login_total > d.logins | length %}<p class="muted">Showing the first {{ d.logins | length }}.</p>{% endif %}
@@ -33,7 +33,7 @@
   <h2>Commands <span class="pill">{{ d.command_total }}</span></h2>
   <ol class="cmds">
   {% for c in d.commands %}
-    <li><code>{{ c.text | p }}</code>
+    <li><code>{{ c.text | p(limit=2000) }}</code>
       {% for m in c.matches %}<a class="tag" href="{{ url_for('sessions', technique=m.technique_id) }}" title="{{ m.rule_id | p }}">{{ m.technique_id | p }}</a> {% endfor %}</li>
   {% else %}<li class="muted">None.</li>{% endfor %}
   </ol>

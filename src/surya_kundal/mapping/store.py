@@ -40,6 +40,7 @@ class MapResult:
     sessions: int = 0
     matches: int = 0
     failed: int = 0
+    more: bool = False  # sessions were left for a later call because of ``limit``
 
 
 def _counts(
@@ -139,11 +140,20 @@ def map_session(db: Session, session_id: str, ruleset: RuleSet | None = None) ->
     return len(rows)
 
 
-def map_pending(db: Session, ruleset: RuleSet | None = None) -> MapResult:
-    """Map every session that is new or changed since it was last mapped."""
+def map_pending(
+    db: Session, ruleset: RuleSet | None = None, *, limit: int | None = None
+) -> MapResult:
+    """Map every session that is new or changed since it was last mapped.
+
+    With ``limit`` at most that many sessions are mapped per call (``result.more`` says there
+    are others), so a service can keep storing new events while a big backlog is worked off.
+    """
     ruleset = ruleset or load_rules()
     result = MapResult()
-    for session_id in _pending_session_ids(db, ruleset, load_catalog().version):
+    pending = _pending_session_ids(db, ruleset, load_catalog().version)
+    if limit is not None and len(pending) > limit:
+        pending, result.more = pending[:limit], True
+    for session_id in pending:
         try:
             result.matches += map_session(db, session_id, ruleset)
             db.commit()

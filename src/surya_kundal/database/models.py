@@ -67,6 +67,8 @@ class HoneypotSession(Base):
     """One attacker visit, identified by Cowrie's own session ID."""
 
     __tablename__ = "sessions"
+    # The dashboard's session list: attackers only, newest first.
+    __table_args__ = (Index("ix_sessions_internal_start", "internal", "start_time"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     src_ip: Mapped[str | None] = mapped_column(String(45), index=True)

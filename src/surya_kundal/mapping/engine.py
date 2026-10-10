@@ -294,5 +294,5 @@ def map_logins(logins: list[dict]) -> list[Match]:
         user = succeeded[0].get("username") or ""
         technique = "T1078.001" if user.lower() in DEFAULT_USERNAMES else "T1078"
         rule_id = "login-default-account" if technique == "T1078.001" else "login-valid-account"
-        matches.append(Match(rule_id, technique, "medium", f"login accepted for {user!r}"))
+        matches.append(Match(rule_id, technique, "medium", f"login accepted for {user!r}"[:300]))
     return matches

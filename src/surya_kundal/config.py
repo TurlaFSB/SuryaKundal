@@ -10,7 +10,7 @@ import logging
 import os
 import stat
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -31,11 +31,11 @@ class Settings:
     geoip_dir: Path
     tor_cache_path: Path
     maxmind_account_id: str
-    maxmind_license_key: str
-    abuseipdb_api_key: str
-    virustotal_api_key: str
+    maxmind_license_key: str = field(repr=False)
+    abuseipdb_api_key: str = field(repr=False)
+    virustotal_api_key: str = field(repr=False)
     wazuh_alerts_path: Path
-    dashboard_token: str
+    dashboard_token: str = field(repr=False)
     log_level: str
     internal_networks: str = ""
     show_internal: bool = False

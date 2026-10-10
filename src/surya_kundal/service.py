@@ -22,6 +22,8 @@ from surya_kundal.watcher import Watcher
 
 logger = logging.getLogger(__name__)
 
+MAP_BATCH = 250  # sessions mapped per slice, so ingestion is never held up for long
+
 GEOIP_REFRESH_SECONDS = 24 * 3600  # check for newer GeoLite2 files daily
 
 
@@ -79,8 +81,10 @@ class Service:
                         dirty = True
                         self._new_data.set()
                     if dirty and time.monotonic() - last_map >= self._map_interval:
-                        self._map()
-                        dirty, last_map = False, time.monotonic()
+                        more = self._map()
+                        # a backlog is worked off in slices, with ingestion in between
+                        dirty = more
+                        last_map = float("-inf") if more else time.monotonic()
                 except Exception:
                     logger.exception("Unexpected error in service cycle")
                 stop.wait(self._interval)
@@ -93,14 +97,17 @@ class Service:
                 self._map()
             logger.info("Service stopped")
 
-    def _map(self) -> None:
+    def _map(self) -> bool:
+        """Map one slice of pending sessions. True if more are waiting."""
         try:
             with self._factory() as db:
-                result = map_pending(db)
+                result = map_pending(db, limit=MAP_BATCH)
             if result.sessions:
                 logger.info("Mapped %d session(s) to ATT&CK", result.sessions)
+            return result.more
         except Exception:
             logger.exception("ATT&CK mapping failed; will retry")
+            return False
 
     def _campaign_loop(self, stop: threading.Event) -> None:
         """Regroup sessions into campaigns when new ones arrived. Its own thread: it must

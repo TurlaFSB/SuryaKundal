@@ -80,6 +80,7 @@ def build_providers(
         tor=TorExitList(settings.tor_cache_path),
         abuse=abuse,
         virustotal=virustotal,
+        geoip_update=updater,
         notes=notes,
     )
 
