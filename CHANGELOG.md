@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `docs/DEPLOYMENT_AWS.md`: ordered, checked steps for a single-server deployment (honeypot on port 22,
+  administration moved to 22222 from one address, metadata service locked, egress control, dashboard
+  through an SSH tunnel). `COWRIE_PORT` sets the host port the honeypot listens on.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

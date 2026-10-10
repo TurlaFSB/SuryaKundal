@@ -78,8 +78,9 @@ services:
       # Lets the unprivileged honeypot user run its local resolver stub on port 53 (deny mode).
       net.ipv4.ip_unprivileged_port_start: "53"
     ports:
-      # Loopback by default so a test run never exposes the honeypot by accident.
-      - "${COWRIE_BIND:-127.0.0.1}:2222:2222"
+      # Loopback by default so a test run never exposes the honeypot by accident. On a server set
+      # COWRIE_BIND=0.0.0.0 and COWRIE_PORT=22 (move the host's own SSH elsewhere first).
+      - "${COWRIE_BIND:-127.0.0.1}:${COWRIE_PORT:-2222}:2222"
     volumes:
       # Persona (seed, boot offset), host keys, fake filesystem and downloaded files.
       - cowrie_state:/cowrie

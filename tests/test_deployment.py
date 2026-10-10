@@ -31,7 +31,7 @@ def test_only_the_dashboard_and_honeypot_publish_ports_and_both_default_to_loopb
     assert set(published) == {"dashboard", "cowrie"}
     assert all(p.startswith("127.0.0.1:") for p in published["dashboard"])
     # The honeypot is exposed deliberately, by setting COWRIE_BIND, never by default.
-    assert published["cowrie"] == ["${COWRIE_BIND:-127.0.0.1}:2222:2222"]
+    assert published["cowrie"] == ["${COWRIE_BIND:-127.0.0.1}:${COWRIE_PORT:-2222}:2222"]
 
 
 def test_honeypot_is_opt_in_and_gets_no_secrets():
