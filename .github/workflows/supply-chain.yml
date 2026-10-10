@@ -33,7 +33,7 @@ jobs:
             slug: surya-kundal-cowrie
             context: cowrie
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Build the image
         run: docker build --tag ${{ matrix.slug }}:scan ${{ matrix.context }}
       - name: Fail on fixable high or critical vulnerabilities
@@ -60,7 +60,7 @@ jobs:
     name: Scan Dockerfiles and Compose for misconfiguration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
         with:
           scan-type: config
