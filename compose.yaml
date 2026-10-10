@@ -111,6 +111,8 @@ services:
       DATABASE_URL: sqlite:////data/surya_kundal.db
       WAZUH_ALERTS_PATH: /data/wazuh_alerts.jsonl
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:?set DASHBOARD_TOKEN in .env (12+ characters)}
+      # Not a secret: show the operator's own (internal) sessions too. See docs/OPERATIONS.md.
+      DASHBOARD_SHOW_INTERNAL: ${DASHBOARD_SHOW_INTERNAL:-}
     ports:
       # Local only. To reach it from elsewhere, put a TLS reverse proxy in front.
       - "127.0.0.1:8080:8080"

@@ -118,3 +118,9 @@ def test_base_image_is_pinned_to_a_digest(text):
 @pytest.mark.parametrize("text", [DOCKERFILE, COWRIE_DOCKERFILE], ids=["main", "cowrie"])
 def test_runtime_images_ship_no_package_manager(text):
     assert "pip uninstall -y pip" in text
+
+
+def test_the_dashboard_receives_the_show_internal_switch_without_the_env_file():
+    # The dashboard gets no .env (least privilege), so every setting it reads is passed by name.
+    assert "env_file" not in SERVICES["dashboard"]
+    assert "DASHBOARD_SHOW_INTERNAL" in SERVICES["dashboard"]["environment"]
