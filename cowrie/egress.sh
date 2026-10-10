@@ -152,6 +152,24 @@ input_rules() {
   fw -A "$IN_CHAIN" -j "$DROP_CHAIN"
 }
 
+# While the chains are rebuilt (flushed and refilled) nothing may slip through the gap, so for that
+# moment everything from the honeypot's bridge is dropped. If the script dies half way, the block
+# stays in place: failing closed is the safe state. A later successful apply removes it.
+hold_closed() {
+  fw -I DOCKER-USER 1 -i "$BRIDGE" -m comment --comment "${TAG}:applying" -j DROP
+  fw -I INPUT 1 -i "$BRIDGE" -m comment --comment "${TAG}:applying" -j DROP
+}
+
+release_hold() {
+  local table_chain
+  for table_chain in DOCKER-USER INPUT; do
+    # delete every leftover block (a failed earlier run may have left one)
+    while fw_has -C "$table_chain" -i "$BRIDGE" -m comment --comment "${TAG}:applying" -j DROP; do
+      fw -D "$table_chain" -i "$BRIDGE" -m comment --comment "${TAG}:applying" -j DROP
+    done
+  done
+}
+
 # Build chains and hook them in, for iptables (v4) or ip6tables (v6).
 apply_family() {
   local mode="$1"
@@ -161,6 +179,8 @@ apply_family() {
     fw_has -S DOCKER-USER || { ((DRY_RUN)) || return 0; }
     mode=deny
   fi
+  release_hold
+  hold_closed
   drop_chain_rules
   forward_rules "$mode"
   input_rules
@@ -168,10 +188,12 @@ apply_family() {
   unhook INPUT "$IN_CHAIN"
   fw -I DOCKER-USER 1 -i "$BRIDGE" -m comment --comment "${TAG}:${mode}" -j "$FWD_CHAIN"
   fw -I INPUT 1 -i "$BRIDGE" -m comment --comment "${TAG}:${mode}" -j "$IN_CHAIN"
+  release_hold
 }
 
 remove_family() {
   [[ "$FW" == "ip6tables" ]] && { command -v ip6tables >/dev/null || return 0; }
+  release_hold
   unhook DOCKER-USER "$FWD_CHAIN"
   unhook INPUT "$IN_CHAIN"
   local chain
@@ -191,11 +213,14 @@ cmd_apply() {
   if ! ((DRY_RUN)) && ! iptables -S DOCKER-USER >/dev/null 2>&1; then
     die "Docker's DOCKER-USER chain does not exist; start Docker first"
   fi
+  trap 'say "apply FAILED part way: traffic from ${BRIDGE} stays blocked (fail closed); fix the error and run apply again" >&2' ERR
   FW=iptables apply_family "$mode"
   FW=ip6tables apply_family "$mode"
+  trap - ERR
   say "applied mode=${mode} to bridge ${BRIDGE}"
   if [[ "$mode" == "captures" ]]; then
-    say "set EGRESS_MODE=captures in .env and run: docker compose --profile honeypot up -d"
+    say "set EGRESS_MODE=captures and HONEY_MASQUERADE=true in .env, then recreate the network:"
+    say "  docker compose --profile honeypot down && docker compose --profile honeypot up -d"
   else
     say "keep EGRESS_MODE unset (or deny) in .env so the honeypot's resolver matches"
   fi
@@ -359,6 +384,9 @@ After=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=120
+# Docker creates the DOCKER-USER chain a moment after it starts; wait for it instead of failing.
+ExecStartPre=/bin/sh -c 'for i in \$\$(seq 1 60); do iptables -S DOCKER-USER >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
 ${env_lines}ExecStart=${SELF} apply ${mode}
 ExecStop=${SELF} remove
 

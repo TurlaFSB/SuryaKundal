@@ -47,14 +47,29 @@ resolvers (1.1.1.1 and 9.9.9.9, set in `cowrie/resolv.captures.conf`), at a limi
 clustering. The cost is that this machine makes real HTTP requests on an attacker's behalf. Use it only
 on a disposable VM with its own address that you are prepared to see on blocklists.
 
-To switch, set `EGRESS_MODE=captures` in `.env`, run `sudo ./cowrie/egress.sh apply captures`, then
-`docker compose --profile honeypot up -d` so the honeypot picks up the matching resolver file. Switch
+To switch, set `EGRESS_MODE=captures` and `HONEY_MASQUERADE=true` in `.env`, run
+`sudo ./cowrie/egress.sh apply captures`, then `docker compose --profile honeypot down` and `up -d` so the
+honeypot picks up the matching resolver file and the network is recreated with masquerading. Switch
 back by unsetting `EGRESS_MODE` and applying `deny`. `verify` fails if the two do not agree.
 
 Both modes also refuse, always: private, link-local, carrier-grade NAT, multicast and other reserved
 ranges (so the LAN and the metadata service are unreachable), and every connection the honeypot tries
 to open to the host itself. Replies on connections an attacker opened into the honeypot always pass;
 that is how SSH works.
+
+## Two safety nets
+
+- **Fail closed while rebuilding.** Applying flushes and refills the chains. For that moment everything
+  from the honeypot's bridge is dropped, so there is no gap in which a packet could pass. If the script
+  dies half way, the block stays (the honeypot becomes unreachable, which is the safe state) and a message
+  says so; a later successful `apply` removes it.
+- **No masquerading in deny mode** (`HONEY_MASQUERADE` is off by default). The honeypot's packets would leave
+  the machine with a private source address, which a cloud network drops. That covers the few seconds
+  after a reboot before the boot unit has re-applied the rules, because Docker starts the honeypot as soon
+  as it starts itself. On a network that does not drop such packets this adds nothing, so the firewall
+  rules remain the real control.
+
+The boot unit waits up to a minute for Docker's `DOCKER-USER` chain before applying.
 
 ## What was verified
 

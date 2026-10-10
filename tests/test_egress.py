@@ -81,8 +81,10 @@ def test_every_denied_packet_is_logged_then_dropped():
 
 def test_rules_are_hooked_in_first_and_only_for_the_honeypot_bridge():
     rules = v4_rules("deny")
-    forward_hook = [ln for ln in rules if " DOCKER-USER " in ln and " -I " in ln]
-    input_hook = [ln for ln in rules if " INPUT " in ln and " -I " in ln]
+    forward_hook = [
+        ln for ln in rules if " DOCKER-USER " in ln and " -I " in ln and "applying" not in ln
+    ]
+    input_hook = [ln for ln in rules if " INPUT " in ln and " -I " in ln and "applying" not in ln]
     assert len(forward_hook) == 1 and len(input_hook) == 1
     assert "-I DOCKER-USER 1 -i br-suryahoney" in forward_hook[0]
     assert "-I INPUT 1 -i br-suryahoney" in input_hook[0]
@@ -273,3 +275,25 @@ def test_real_packets_follow_the_rules():
         "attacker_into_honeypot": True,
     }
     assert seen["removed"] == everything  # nothing is left behind
+
+
+def test_nothing_slips_through_while_the_chains_are_rebuilt():
+    rules = v4_rules("deny")
+    hold = next(i for i, ln in enumerate(rules) if "surya-honey:applying" in ln and " -I " in ln)
+    first_chain_change = next(i for i, ln in enumerate(rules) if " -N " in ln or " -F " in ln)
+    final_hook = next(i for i, ln in enumerate(rules) if "surya-honey:deny" in ln)
+    release = (
+        next(i for i, ln in enumerate(rules) if " -D " in ln and "applying" in ln)
+        if any(" -D " in ln and "applying" in ln for ln in rules)
+        else None
+    )
+    assert hold < first_chain_change < final_hook
+    # in a dry run no rule exists yet, so the release is only a query; the real run is covered by
+    # the packet lab below
+    assert release is None or release > final_hook
+
+
+def test_boot_unit_waits_for_dockers_chain():
+    out = egress("--dry-run", "install", "deny").stdout
+    assert "ExecStartPre=" in out and "DOCKER-USER" in out and "$$(seq" in out
+    assert "TimeoutStartSec=120" in out

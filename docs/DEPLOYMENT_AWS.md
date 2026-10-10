@@ -28,7 +28,9 @@ unreachable from it.
 ```
 sudo apt-get update && sudo apt-get -y upgrade
 sudo apt-get install -y docker.io docker-compose-v2 git
-sudo usermod -aG docker ubuntu     # log out and back in afterwards
+sudo usermod -aG docker ubuntu     # log out and back in afterwards (or run: newgrp docker)
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # 2 GB of RAM is tight for three containers
 ```
 
 Check: `docker compose version` prints a version.
@@ -43,6 +45,7 @@ keeping port 22 working until the new one is proven.
    ```
    printf 'Port 22\nPort 22222\n' | sudo tee /etc/ssh/sshd_config.d/10-ports.conf
    sudo systemctl disable --now ssh.socket
+   sudo systemctl mask ssh.socket          # an update must not switch it back on and grab port 22
    sudo systemctl enable --now ssh.service
    sudo sshd -t && sudo systemctl restart ssh.service
    ```
@@ -54,7 +57,7 @@ keeping port 22 working until the new one is proven.
    sudo systemctl restart ssh.service
    ```
    and confirm `sudo ss -ltnp | grep sshd` shows only 22222.
-5. In the console, change the inbound rule for TCP 22 to **0.0.0.0/0** (the honeypot's port) and
+5. (The honeypot is not running yet, so nothing answers on 22 until step 5 below.) In the console, change the inbound rule for TCP 22 to **0.0.0.0/0** (the honeypot's port) and
    delete nothing else.
 
 ## 4. Get the project and configure it
@@ -85,7 +88,7 @@ sudo ./cowrie/egress.sh install deny   # re-applies at every boot
 
 ## 6. Open the security group's outbound rules
 
-Replace the default "all traffic" outbound rule with TCP 80 and 443 only: Ubuntu's package mirrors use
+Replace the default "all traffic" outbound rule with TCP 80 and 443 only (deny mode, the default; `captures` mode also needs UDP and TCP 53 to 1.1.1.1 and 9.9.9.9): Ubuntu's package mirrors use
 port 80, and enrichment, GeoIP updates and image pulls use 443. DNS from the host goes to the VPC
 resolver, which security groups do not filter, so it needs no rule. This is a second layer: even if
 the honeypot's own firewall failed, only web traffic could leave.
@@ -111,8 +114,14 @@ are marked internal and hidden. Real scanners usually arrive within minutes.
 
 ## 8. Keep it healthy
 
-- Backups: `docker compose exec pipeline surya-kundal backup --keep 7`, from cron. Copy them off the
-  machine now and then (`docs/OPERATIONS.md`).
+- Backups, from cron (`crontab -e`), compressed and rotated; copy them off the machine now and then:
+  `17 3 * * * cd ~/surya-kundal && docker compose exec -T pipeline surya-kundal backup --compress --keep 7`
+- **Disk.** Cowrie never deletes its own logs, recordings or captured files, and the database and
+  backups grow too. Without cleanup a 20 GiB disk fills in a few months, and a full disk stops
+  recording. Add a daily cleanup of old Cowrie files (keeps 14 days of rotated logs and recordings):
+  `27 3 * * * cd ~/surya-kundal && docker compose exec -T cowrie sh -c "find /cowrie/var/log/cowrie -name 'cowrie.json.*' -mtime +14 -delete; find /cowrie/var/lib/cowrie/tty -type f -mtime +14 -delete"`
+  and after each update `docker image prune -f`. Set a CloudWatch alarm on disk use if you can, or check
+  `df -h /` when you log in.
 - Updates: `sudo apt-get -y upgrade` weekly; `git pull && docker compose --profile honeypot up -d --build` to update the project.
 - Stop everything cleanly: `docker compose --profile honeypot down`, then `sudo ./cowrie/egress.sh remove`.
 

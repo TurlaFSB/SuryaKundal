@@ -37,8 +37,12 @@ services:
     build: .
     container_name: surya-pipeline
     command: ["run"]
-    # Only the pipeline gets .env (API keys for enrichment). The honeypot faces the internet
-    # and the dashboard needs just its password, so neither receives any other secret.
+    # Only the pipeline gets .env (API keys for enrichment; it therefore also sees DASHBOARD_TOKEN,
+    # which lives in the same file). The honeypot faces the internet and the dashboard needs just
+    # its password, so neither receives any other secret.
+    # The campaign rebuild is the memory peak, so this is above the other services' limit; a
+    # swapfile covers bursts (docs/DEPLOYMENT_AWS.md).
+    mem_limit: 640m
     env_file:
       - path: .env
         required: false
@@ -145,6 +149,10 @@ networks:
     driver_opts:
       # Must match SURYA_HONEY_BRIDGE in cowrie/egress.sh (an interface name is 15 characters at most).
       com.docker.network.bridge.name: br-suryahoney
+      # Deny mode (default): the honeypot's packets leave the host with their private source
+      # address, so a cloud network drops them even if the firewall rules are missing for a few
+      # seconds after a reboot. captures mode needs real masquerading: set HONEY_MASQUERADE=true.
+      com.docker.network.bridge.enable_ip_masquerade: "${HONEY_MASQUERADE:-false}"
     ipam:
       config:
         - subnet: ${HONEY_SUBNET:-172.29.77.0/24}
