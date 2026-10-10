@@ -12,10 +12,10 @@ Both runs used Cowrie 3.1.1 on the same machine, from a separate client, over SS
 |---|---|---|
 | 1. Scanners and bots | 2 / 7 | **7 / 7** |
 | 2. Quick manual look | 6 / 16 | **16 / 16** |
-| 3. Skilled operator | 2 / 15 | 5 / 15 |
+| 3. Skilled operator | 2 / 15 | 6 / 15 |
 | 4. Protocol-aware tooling | 0 / 7 | 0 / 7 |
-| **Overall** | **10 / 45 (22%)** | **28 / 45 (62%)** |
-| Checks that configuration can fix | 10 / 30 | 28 / 30 |
+| **Overall** | **10 / 45 (22%)** | **29 / 45 (64%)** |
+| Checks that configuration can fix | 10 / 30 | 29 / 30 |
 
 Raw results are in `evaluation/results/`; `--compare` regenerates this table.
 
@@ -25,10 +25,10 @@ What the numbers say:
   or `df` finds nothing to separate it from Debian 12.
 - Tier 3 and 4 are mostly out of reach. Those checks look at how Cowrie is built (Twisted's SSH
   stack, Python command re-implementations, a filesystem derived from a container image). Fifteen of
-  the 45 checks are marked "config cannot fix" and the kit fails exactly those, plus two others:
-  - `free` reports the host's real memory. Size the VM to match `MemTotal` (documented in the kit).
-    In this run the host had 8 GB and the persona says 4 GB.
-  - `/proc` lists two process directories. The kit could generate realistic ones; it does not yet.
+  the 45 checks are marked "config cannot fix" and the kit fails exactly those, plus one other: `free` reports the host's real memory. Size the VM to
+  match `MemTotal` (documented in the kit). In this run the host had 8 GB and the persona says 4 GB.
+- The first version of this harness showed `/proc` listing only two process directories. The kit now
+  generates one per `ps` row, with matching `cmdline`, `comm`, `status` and `stat`.
 - A skilled operator will still identify Cowrie. The kit raises the cost; it does not make the
   honeypot invisible. `cowrie/FINGERPRINTING.md` explains each gap.
 

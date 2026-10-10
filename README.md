@@ -146,7 +146,7 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 Two harnesses in [`evaluation/`](evaluation/) give numbers instead of claims:
 
 - **ATT&CK mapper**: 103 hand-labelled commands; first run precision 0.90, recall 0.93, then fixed. See [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md).
-- **Honeypot deception**: 45 probes grouped by attacker class. Stock Cowrie passes 10, with the kit 28, and every check configuration can fix except two. See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
+- **Honeypot deception**: 45 probes grouped by attacker class. Stock Cowrie passes 10, with the kit 29, and every check configuration can fix except one (VM memory size). See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
 
 ```bash
 surya-kundal export --format stix --output iocs.json          # STIX 2.1 for MISP, OpenCTI and others

@@ -2,14 +2,14 @@
   "label": "with the Surya Kundal kit",
   "summary": {
     "overall": {
-      "passed": 28,
+      "passed": 29,
       "total": 45,
-      "score": 0.622
+      "score": 0.644
     },
     "fixable": {
-      "passed": 28,
+      "passed": 29,
       "total": 30,
-      "score": 0.933
+      "score": 0.967
     },
     "tiers": {
       "1": {
@@ -23,9 +23,9 @@
         "score": 1.0
       },
       "3": {
-        "passed": 5,
+        "passed": 6,
         "total": 15,
-        "score": 0.333
+        "score": 0.4
       },
       "4": {
         "passed": 0,
@@ -300,8 +300,8 @@
       "id": "proc-has-many-pids",
       "tier": 3,
       "title": "/proc lists a realistic number of processes",
-      "status": "fail",
-      "detail": "2 process directories",
+      "status": "pass",
+      "detail": "57 process directories",
       "limit": false,
       "ref": "row 5"
     },

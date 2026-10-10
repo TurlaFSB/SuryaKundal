@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pickle
 import random
 import re
@@ -125,6 +126,99 @@ def put_file(root, path, data: bytes, uid, gid, mode, mtime, stats):
     node[A_REALFILE] = None
     stats["updated"] += 1
     return node
+
+
+# ---------------------------------------------------------------- /proc/<pid>
+STATE_NAMES = {
+    "R": "running",
+    "S": "sleeping",
+    "D": "disk sleep",
+    "T": "stopped",
+    "Z": "zombie",
+    "I": "idle",
+}
+
+
+def proc_entries(proc: dict, *, uids: dict, listener_pid, boot_ts: int, hz: int = 100):
+    """The files Linux would show for one process, as {name: bytes}. `proc` is one row of the
+    ps list in cmdoutput.json, so `ps` and /proc/<pid> always tell the same story."""
+    pid = int(proc["PID"])
+    command = proc["COMMAND"]
+    kernel = command.startswith("[")
+    if kernel:
+        comm = command.strip("[]")[:15]
+        cmdline = b""
+    else:
+        parts = command.split(" ")
+        comm = os.path.basename(parts[0].rstrip(":"))[:15] or "sshd"
+        if command.startswith("sshd:"):
+            comm = "sshd"
+        if command == "/sbin/init":
+            comm = "systemd"  # Debian's init is a symlink to systemd; ps shows the path
+        cmdline = b"\x00".join(x.encode() for x in parts) + b"\x00"
+    if pid in (1, 2):
+        ppid = 0
+    elif kernel:
+        ppid = 2
+    elif command.startswith("sshd:") and "[listener]" not in command and listener_pid:
+        ppid = listener_pid
+    else:
+        ppid = 1
+    state = proc["STAT"][0]
+    uid = uids.get(proc["USER"], 0)
+    started = 40 + pid * 3  # clock ticks after boot; early processes start early
+    stat_fields = (
+        [str(pid), f"({comm})", state, str(ppid), str(pid), str(pid), "0", "-1"]
+        + ["69238880" if kernel else "4194560"]  # 9 flags
+        + ["0"] * 8  # 10-17 faults and cpu times
+        + ["0" if kernel else "20", "0", "1", "0"]  # 18 priority 19 nice 20 threads 21 itreal
+        + [str(started), str(int(proc["VSZ"]) * 1024), str(int(proc["RSS"]) // 4)]  # 22-24
+        + ["0"] * 28  # 25-52
+    )
+    lines = [
+        f"Name:\t{comm}",
+        "Umask:\t0022",
+        f"State:\t{state} ({STATE_NAMES.get(state, 'sleeping')})",
+        f"Tgid:\t{pid}",
+        "Ngid:\t0",
+        f"Pid:\t{pid}",
+        f"PPid:\t{ppid}",
+        "TracerPid:\t0",
+        f"Uid:\t{uid}\t{uid}\t{uid}\t{uid}",
+        f"Gid:\t{uid}\t{uid}\t{uid}\t{uid}",
+    ]
+    if not kernel:
+        lines += [
+            f"VmSize:\t{int(proc['VSZ']):>8} kB",
+            f"VmRSS:\t{int(proc['RSS']):>8} kB",
+            "Threads:\t1",
+        ]
+    else:
+        lines += ["Threads:\t1"]
+    return {
+        "cmdline": cmdline,
+        "comm": (comm + "\n").encode(),
+        "status": ("\n".join(lines) + "\n").encode(),
+        "stat": (" ".join(stat_fields) + "\n").encode(),
+    }
+
+
+def add_proc_entries(root, processes: list, uids: dict, boot_ts: int, stats: dict) -> int:
+    """Replace the container's /proc/<pid> directories with one per process in `processes`."""
+    proc = lookup(root, "/proc")
+    if proc is None or proc[A_TYPE] != T_DIR:
+        die("no /proc in source pickle")
+    proc[A_CONTENTS] = [c for c in proc[A_CONTENTS] if not c[A_NAME].isdigit()]
+    listener = next((int(p["PID"]) for p in processes if "[listener]" in p["COMMAND"]), None)
+    for entry in processes:
+        pid = int(entry["PID"])
+        files = proc_entries(entry, uids=uids, listener_pid=listener, boot_ts=boot_ts)
+        mtime = boot_ts + 5 + pid // 10
+        node = mkdirs(root, f"/proc/{pid}", mtime, 0, 0, 0o40555)
+        node[A_UID] = node[A_GID] = 0
+        for name, data in files.items():
+            put_file(root, f"/proc/{pid}/{name}", data, 0, 0, 0o100444, mtime, stats)
+    return len(processes)
 
 
 # ----------------------------------------------------------------- policy bits
@@ -371,7 +465,11 @@ def main() -> None:
                 )
                 mirrored += 1
 
-    # --- 6. write pickle
+    # --- 6. /proc/<pid> for every process `ps` lists, then write the pickle
+    cmd = render(Path(a.cmdoutput_src).read_text(encoding="utf-8"), tokens)
+    processes = json.loads(cmd)["command"]["ps"]  # fail early if the template is invalid
+    uids = {u["name"]: u["uid"] for u in users}
+    proc_count = add_proc_entries(root, processes, uids, boot_ts, stats)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "xb") as fh:
         pickle.dump(root, fh)
@@ -382,8 +480,6 @@ def main() -> None:
         dest = txt_out / f.relative_to(a.txtcmds_src)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(render(f.read_text(encoding="utf-8"), tokens), encoding="utf-8")
-    cmd = render(Path(a.cmdoutput_src).read_text(encoding="utf-8"), tokens)
-    json.loads(cmd)  # fail early if the template rendered to invalid JSON
     Path(a.cmdoutput_out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.cmdoutput_out).write_text(cmd, encoding="utf-8")
 
@@ -393,6 +489,7 @@ def main() -> None:
         f"changes    : {stats['created']} files created, {stats['updated']} updated, {stats['removed']} removed"
     )
     print(f"host keys  : {mirrored} public key(s) mirrored into /etc/ssh")
+    print(f"/proc      : {proc_count} process directories, matching `ps`")
     print(
         f"identity   : machine-id {machine_id[:8]}..., root UUID {root_uuid[:8]}..., 'installed' {install_days} days ago"
     )
