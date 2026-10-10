@@ -37,6 +37,8 @@ class Settings:
     wazuh_alerts_path: Path
     dashboard_token: str
     log_level: str
+    internal_networks: str = ""
+    show_internal: bool = False
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
@@ -57,6 +59,8 @@ class Settings:
             wazuh_alerts_path=Path(get("WAZUH_ALERTS_PATH", DEFAULT_WAZUH_ALERTS)).expanduser(),
             dashboard_token=get("DASHBOARD_TOKEN"),
             log_level=get("LOG_LEVEL", "INFO").upper(),
+            internal_networks=get("INTERNAL_NETWORKS"),
+            show_internal=get("DASHBOARD_SHOW_INTERNAL").lower() in ("1", "true", "yes"),
         )
 
 

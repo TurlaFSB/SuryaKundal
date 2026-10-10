@@ -11,11 +11,14 @@ brute-force session).
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import ColumnElement, distinct, func, or_, select, true
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
@@ -32,6 +35,33 @@ from surya_kundal.database.models import (
     Upload,
 )
 from surya_kundal.mapping.attack import load_catalog
+
+_include_internal: ContextVar[bool] = ContextVar("include_internal", default=False)
+
+
+@contextmanager
+def internal_traffic(show: bool) -> Iterator[None]:
+    """Within the block, counts and lists include (or leave out) the operator's own sessions."""
+    token = _include_internal.set(show)
+    try:
+        yield
+    finally:
+        _include_internal.reset(token)
+
+
+def show_internal(show: bool) -> None:
+    """Set for the current request or thread; the web layer calls this before each request."""
+    _include_internal.set(show)
+
+
+def _real() -> ColumnElement[bool]:
+    """Condition on sessions: attackers only, unless internal traffic was asked for."""
+    return true() if _include_internal.get() else HoneypotSession.internal.is_(False)
+
+
+def _real_ids() -> Any:
+    return select(HoneypotSession.id).where(_real())
+
 
 # Rules that mean "the visitor is checking whether this is a honeypot or a sandbox".
 PROBE_RULES = ("discovery-virtualization", "discovery-ssh-version")
@@ -199,14 +229,24 @@ def pulse(db: Session) -> tuple[int, datetime | None]:
 
 
 def totals(db: Session) -> Totals:
-    def count(model: type) -> int:
-        return int(db.scalar(select(func.count()).select_from(model)) or 0)
+    def count(model: Any) -> int:
+        query = select(func.count()).select_from(model).where(model.session_id.in_(_real_ids()))
+        return int(db.scalar(query) or 0)
 
-    sessions, last = pulse(db)
-    sources = db.scalar(select(func.count(distinct(HoneypotSession.src_ip)))) or 0
-    accepted = db.scalar(select(func.count()).where(Login.success.is_(True))) or 0
+    sessions, last = db.execute(
+        select(func.count(), func.max(HoneypotSession.start_time))
+        .select_from(HoneypotSession)
+        .where(_real())
+    ).one()
+    sources = db.scalar(select(func.count(distinct(HoneypotSession.src_ip))).where(_real())) or 0
+    accepted = (
+        db.scalar(
+            select(func.count()).where(Login.success.is_(True), Login.session_id.in_(_real_ids()))
+        )
+        or 0
+    )
     return Totals(
-        sessions=sessions,
+        sessions=int(sessions),
         sources=int(sources),
         accepted_logins=int(accepted),
         commands=count(Command),
@@ -224,7 +264,7 @@ def depth(db: Session) -> Depth:
     """
 
     def count(*conditions: object) -> int:
-        query = select(func.count()).select_from(HoneypotSession)
+        query = select(func.count()).select_from(HoneypotSession).where(_real())
         for condition in conditions:
             query = query.where(condition)  # type: ignore[arg-type]
         return int(db.scalar(query) or 0)
@@ -263,7 +303,7 @@ def map_points(db: Session) -> list[MapPoint]:
             func.count(HoneypotSession.id),
         )
         .join(HoneypotSession, HoneypotSession.src_ip == IpGeo.ip)
-        .where(IpGeo.latitude.is_not(None), IpGeo.longitude.is_not(None))
+        .where(IpGeo.latitude.is_not(None), IpGeo.longitude.is_not(None), _real())
         .group_by(IpGeo.ip)
         .order_by(func.count(HoneypotSession.id).desc())
         .limit(500)
@@ -281,6 +321,7 @@ def top_countries(db: Session, limit: int = 6) -> list[tuple[str, int]]:
         select(code, func.count(HoneypotSession.id))
         .select_from(HoneypotSession)
         .outerjoin(IpGeo, IpGeo.ip == HoneypotSession.src_ip)
+        .where(_real())
         .group_by(code)
         .order_by(func.count(HoneypotSession.id).desc())
         .limit(limit)
@@ -296,7 +337,7 @@ def hourly_activity(db: Session, hours: int = 24, now: datetime | None = None) -
     buckets = [0] * hours
     rows = db.execute(
         select(HoneypotSession.start_time)
-        .where(HoneypotSession.start_time >= start)
+        .where(HoneypotSession.start_time >= start, _real())
         .execution_options(yield_per=5000)
     )
     for (when,) in rows:
@@ -344,7 +385,7 @@ def sessions_page(
         .where(IpIntel.ip == HoneypotSession.src_ip, IpIntel.provider == "tor")
         .scalar_subquery()
     )
-    conditions = []
+    conditions = [_real()]
     if query:
         conditions.append(
             or_(
@@ -415,6 +456,7 @@ def technique_counts(db: Session, limit: int | None = None) -> list[TechniqueCou
             func.count(distinct(TechniqueMatch.session_id)),
             func.count(),
         )
+        .where(TechniqueMatch.session_id.in_(_real_ids()))
         .group_by(TechniqueMatch.technique_id)
         .order_by(
             func.count(distinct(TechniqueMatch.session_id)).desc(), TechniqueMatch.technique_id
@@ -458,7 +500,7 @@ def probes(db: Session, limit: int = 8) -> list[Probe]:
             TechniqueMatch.evidence,
         )
         .join(HoneypotSession, HoneypotSession.id == TechniqueMatch.session_id)
-        .where(TechniqueMatch.rule_id.in_(PROBE_RULES))
+        .where(TechniqueMatch.rule_id.in_(PROBE_RULES), _real())
         .order_by(HoneypotSession.start_time.desc(), TechniqueMatch.id.desc())
         .limit(limit)
     ).all()
@@ -469,7 +511,8 @@ def probing_sessions(db: Session) -> int:
     return int(
         db.scalar(
             select(func.count(distinct(TechniqueMatch.session_id))).where(
-                TechniqueMatch.rule_id.in_(PROBE_RULES)
+                TechniqueMatch.rule_id.in_(PROBE_RULES),
+                TechniqueMatch.session_id.in_(_real_ids()),
             )
         )
         or 0

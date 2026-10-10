@@ -18,7 +18,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 6px; }
 
 .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 28px; padding: 0 24px; height: 52px;
-  background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: saturate(180%) blur(20px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 600; font-size: 1.05rem; color: var(--ink); letter-spacing: -.01em; }
 .brand:hover { text-decoration: none; }

@@ -26,6 +26,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -74,6 +75,10 @@ class HoneypotSession(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     client_version: Mapped[str | None] = mapped_column(Text)
     hassh: Mapped[str | None] = mapped_column(String(32), index=True)
+    # Your own traffic (tests, harness, LAN); see surya_kundal.internal. Hidden by default.
+    internal: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), index=True
+    )
 
     # Children are listed in the order they happened (timestamp, then insertion order).
     logins: Mapped[list[Login]] = relationship(

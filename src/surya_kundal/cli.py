@@ -104,6 +104,12 @@ def _build_parser() -> argparse.ArgumentParser:
     mapping = sub.add_parser("map", help="map stored sessions to MITRE ATT&CK techniques")
     _add_db_option(mapping)
 
+    internal = sub.add_parser(
+        "reclassify",
+        help="re-check which sessions are your own traffic (run after changing INTERNAL_NETWORKS)",
+    )
+    _add_db_option(internal)
+
     techniques = sub.add_parser("techniques", help="show ATT&CK techniques seen, most common first")
     _add_db_option(techniques)
     techniques.add_argument("--limit", type=int, default=30, help="maximum rows to show")
@@ -585,6 +591,7 @@ def _run_dashboard(args: argparse.Namespace, settings: Settings) -> int:
         alerts_path=args.alerts or settings.wazuh_alerts_path,
         token=token,
         allowed_hosts=(args.host,),
+        show_internal=settings.show_internal,
     )
     print(
         f"Dashboard on http://{args.host}:{args.port}"
@@ -697,6 +704,21 @@ def _run_map(args: argparse.Namespace, settings: Settings) -> int:
         f"{result.failed} failed."
     )
     return 1 if result.failed else 0
+
+
+def _run_reclassify(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal.internal import InternalNetworksError, reclassify
+
+    try:
+        with _open_database(args, settings)() as db:
+            changed, internal, total = reclassify(db)
+    except InternalNetworksError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(f"{internal} of {total} session(s) are internal; {changed} changed.")
+    if changed:
+        print("Run `surya-kundal campaigns build` to rebuild campaigns without them.")
+    return 0
 
 
 def _run_list(args: argparse.Namespace, settings: Settings) -> int:
@@ -843,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
         "geoip": _run_geoip,
         "enrich": _run_enrich,
         "map": _run_map,
+        "reclassify": _run_reclassify,
         "techniques": _run_techniques,
         "show": _run_show,
         "wazuh-rules": _run_wazuh_rules,

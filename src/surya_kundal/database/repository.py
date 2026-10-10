@@ -17,6 +17,7 @@ from surya_kundal.database.models import (
     TunnelRequest,
     Upload,
 )
+from surya_kundal.internal import is_internal
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ def save_session(db: Session, session_id: str, summary: dict[str, Any]) -> Honey
 
     if summary.get("src_ip") is not None:
         record.src_ip = summary["src_ip"]
+        record.internal = is_internal(record.src_ip)
     if summary.get("client_version") is not None:
         record.client_version = summary["client_version"]
     if summary.get("hassh") is not None:

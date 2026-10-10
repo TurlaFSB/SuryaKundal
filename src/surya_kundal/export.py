@@ -218,7 +218,7 @@ def _aware(value: datetime | None) -> datetime | None:
 def _address_indicators(
     db: Session, since: datetime, now: datetime, filters: Filters, summary: Summary
 ) -> list[Indicator]:
-    window = HoneypotSession.start_time >= since
+    window = (HoneypotSession.start_time >= since) & HoneypotSession.internal.is_(False)
     rows = db.execute(
         select(
             HoneypotSession.src_ip,
@@ -398,7 +398,11 @@ def _file_indicators(
                 func.min(sample_column),
             )
             .join(HoneypotSession, HoneypotSession.id == model.session_id)
-            .where(model.sha256.is_not(None), HoneypotSession.start_time >= since)
+            .where(
+                model.sha256.is_not(None),
+                HoneypotSession.start_time >= since,
+                HoneypotSession.internal.is_(False),
+            )
             .group_by(model.sha256)
         ).all()
         for sha, _first, last, count, sample in rows:
@@ -485,7 +489,7 @@ def _url_indicators(
             func.count(HoneypotSession.id.distinct()),
         )
         .join(HoneypotSession, HoneypotSession.id == seen.c.sid)
-        .where(HoneypotSession.start_time >= since)
+        .where(HoneypotSession.start_time >= since, HoneypotSession.internal.is_(False))
         .group_by(seen.c.url)
     ).all()
     good: list[tuple[str, datetime, int]] = []

@@ -132,3 +132,18 @@ def test_a_database_from_an_older_version_is_refused_with_a_clear_message(tmp_pa
 
     assert main(["list", "--db", f"sqlite:///{path}"]) == 2
     assert "older version" in capsys.readouterr().err
+
+
+def test_upgrade_marks_existing_local_sessions_internal(engine):
+    config = alembic_config()
+    with engine.begin() as conn:
+        config.attributes["connection"] = conn
+        command.upgrade(config, "0009")
+        for sid, ip in (("a", "172.29.77.1"), ("b", "80.66.76.10"), ("c", None)):
+            conn.execute(
+                text("INSERT INTO sessions (id, src_ip) VALUES (:id, :ip)"), {"id": sid, "ip": ip}
+            )
+        command.upgrade(config, "head")
+    with engine.connect() as conn:
+        rows = dict(conn.execute(text("SELECT id, internal FROM sessions")).all())
+    assert rows == {"a": 1, "b": 0, "c": 0}

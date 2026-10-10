@@ -134,6 +134,7 @@ def create_app(
     token: str = "",
     allowed_hosts: tuple[str, ...] = (),
     clock: Callable[[], float] = time.monotonic,
+    show_internal: bool = False,
 ) -> Flask:
     """Build the app. Pass a factory from ``readonly_session_factory`` for production."""
     app = Flask(__name__)
@@ -157,6 +158,10 @@ def create_app(
         session = g.pop("db", None)
         if session is not None:
             session.close()
+
+    @app.before_request
+    def scope() -> None:
+        queries.show_internal(show_internal)
 
     @app.before_request
     def guard() -> Response | None:

@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, true
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.models import (
@@ -323,7 +323,7 @@ def _evidence(
 # --- reading and writing the database -----------------------------------------------
 
 
-def load_facts(db: Session) -> list[SessionFacts]:
+def load_facts(db: Session, *, include_internal: bool = False) -> list[SessionFacts]:
     """Read every session with the few things grouping needs. Streams the big tables."""
     facts: dict[str, SessionFacts] = {}
     for row in db.execute(
@@ -333,7 +333,7 @@ def load_facts(db: Session) -> list[SessionFacts]:
             HoneypotSession.start_time,
             HoneypotSession.hassh,
             HoneypotSession.client_version,
-        )
+        ).where(true() if include_internal else HoneypotSession.internal.is_(False))
     ):
         facts[row.id] = SessionFacts(
             id=row.id,

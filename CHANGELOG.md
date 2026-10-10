@@ -7,6 +7,11 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Your own traffic no longer passes for attackers. Sessions from loopback, private ranges, the Docker
+  bridges (so the deception harness and your test logins) and anything listed in `INTERNAL_NETWORKS`
+  are marked internal (migration 0010; existing sessions are classified once). The dashboard,
+  `/metrics`, campaigns and the IOC export leave them out; `DASHBOARD_SHOW_INTERNAL=1` shows them and
+  `surya-kundal reclassify` re-checks after a change.
 - Attempted downloads: with egress blocked no download completes, so Cowrie logs no file and no hash and
   the address was only in the command text. The mapper now reads fetch addresses out of commands
   (`wget`, `curl`, `tftp`, `busybox ftpget`, `git clone`, also behind `sudo`, `sh -c`, `cd x &&`;

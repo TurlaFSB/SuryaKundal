@@ -64,6 +64,21 @@ docker compose exec -T pipeline surya-kundal prune --older-than 180 --yes --vacu
 - Raw Cowrie logs and tty recordings are separate and are not touched. Rotate or remove them
   according to the law and policy that apply to you (see `docs/THREAT_MODEL.md`).
 
+## Your own traffic
+
+Test logins, the deception harness, health probes and your own browsing reach the honeypot too.
+They are stored and mapped like anything else, but marked **internal** so they do not pass for
+attackers. A session is internal when its source is loopback, a private range (10/8, 172.16/12,
+192.168/16, fc00::/7), link-local, shared address space (100.64/10), or an address or network you
+list in `INTERNAL_NETWORKS` in `.env` (for example your own public address while you test from
+outside). That covers the Docker bridges and the harness.
+
+Internal sessions are left out of the dashboard, `/metrics`, campaigns and the IOC export. A direct
+link to one still opens, and `DASHBOARD_SHOW_INTERNAL=1` shows them everywhere on the dashboard.
+After you change `INTERNAL_NETWORKS`, run `surya-kundal reclassify` to re-check the stored
+sessions, then `surya-kundal campaigns build`. Pipeline liveness (`/api/pulse`, the "new activity"
+banner) still counts everything, so you can see the system working.
+
 ## Metrics
 
 The dashboard serves Prometheus metrics at `/metrics`, behind the same password as every other
