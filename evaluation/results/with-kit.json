@@ -74,7 +74,7 @@
     {
       "id": "default-credentials-refused",
       "tier": 1,
-      "title": "Well-known default credentials are refused",
+      "title": "Stock Cowrie accounts and wildcard passwords are refused",
       "status": "pass",
       "detail": "all refused",
       "limit": false,

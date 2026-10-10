@@ -74,9 +74,9 @@
     {
       "id": "default-credentials-refused",
       "tier": 1,
-      "title": "Well-known default credentials are refused",
+      "title": "Stock Cowrie accounts and wildcard passwords are refused",
       "status": "fail",
-      "detail": "accepted: root/password, admin/admin, phil/phil",
+      "detail": "accepted: phil, 24df52a0",
       "limit": false,
       "ref": "row 4"
     },
@@ -283,7 +283,7 @@
       "tier": 3,
       "title": "`uptime` agrees with /proc/uptime",
       "status": "pass",
-      "detail": "/proc/uptime 56.7 d, uptime 56 d",
+      "detail": "/proc/uptime 76.4 d, uptime 76 d",
       "limit": false,
       "ref": "row 13"
     },

@@ -392,16 +392,17 @@ def _(p: Probe):
     return not accepted, "accepted" if accepted else "refused"
 
 
-@check("default-credentials-refused", 1, "Well-known default credentials are refused", ref="row 4")
+@check(
+    "default-credentials-refused",
+    1,
+    "Stock Cowrie accounts and wildcard passwords are refused",
+    ref="row 4",
+)
 def _(p: Probe):
-    tried = [
-        ("root", "root"),
-        ("root", "123456"),
-        ("root", "password"),
-        ("admin", "admin"),
-        ("phil", "phil"),
-    ]
-    accepted = [f"{u}/{pw}" for u, pw in tried if p.login_ok(u, pw)]
+    # A stock install accepts any password for 'phil' and for root. A hand-picked weak root
+    # password is a deliberate lure (the 'collect' policy), so it is not tested here.
+    tried = [("phil", secrets.token_urlsafe(8)), (secrets.token_hex(4), secrets.token_urlsafe(8))]
+    accepted = [user for user, password in tried if p.login_ok(user, password)]
     return not accepted, "accepted: " + ", ".join(accepted) if accepted else "all refused"
 
 

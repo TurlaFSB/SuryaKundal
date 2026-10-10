@@ -69,5 +69,8 @@ checks; `--fail-under 0.9` exits 1 if the score for fixable checks is lower, for
   from Cowrie's observed behaviour. They have not been compared against a real Debian 12 host
   over the same probe, which is the obvious next step for a stronger claim.
 - The score weights every check equally. A banner mismatch matters more than `echo $0`.
+- The `collect` login policy accepts about 30 weak root passwords on purpose, to let scanners in
+  and capture sessions. The harness does not penalise that; it only checks that stock-Cowrie
+  accounts and wildcard passwords are refused. `stealth` accepts three exact logins.
 - It measures the honeypot against these probes only; it is not a measure of how real attackers
   will fare.
