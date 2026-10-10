@@ -15,11 +15,16 @@
 #   * It does not stop, start or restart Cowrie.
 #
 # Usage: deploy.sh [--cowrie-home DIR] [--policy collect|stealth] [--dry-run]
-#                  [--refresh-boot] [--regen-hostkeys] [--allow-root] [-h]
+#                  [--refresh-boot] [--regen-hostkeys] [--memtotal-kb N|auto|persona]
+#                  [--allow-root] [-h]
 #
 # --policy collect (default) accepts a few dozen common weak root passwords so
 #   scanners get in and you capture sessions; --policy stealth accepts three
 #   exact pairs only (hardest to spot, very little data). See etc/.
+#
+# --memtotal-kb auto (default) makes the persona's memory equal this machine's real
+#   MemTotal, because Cowrie's `free` reads the host and would otherwise disagree with
+#   /proc/meminfo. `persona` keeps the kit's own 4 GB figure; a number sets it.
 set -euo pipefail
 
 KIT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,6 +34,7 @@ REFRESH_BOOT=0
 REGEN_KEYS=0
 ALLOW_ROOT=0
 POLICY=collect
+MEMTOTAL=auto
 
 usage() {
     sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -44,6 +50,11 @@ while (($# > 0)); do
         --policy)
             [[ $# -ge 2 && ( "$2" == collect || "$2" == stealth ) ]] || { echo "deploy: --policy must be collect or stealth" >&2; exit 2; }
             POLICY="$2"
+            shift 2
+            ;;
+        --memtotal-kb)
+            [[ $# -ge 2 && ( "$2" == auto || "$2" == persona || "$2" =~ ^[0-9]+$ ) ]] || { echo "deploy: --memtotal-kb must be auto, persona or a number" >&2; exit 2; }
+            MEMTOTAL="$2"
             shift 2
             ;;
         --dry-run) DRY_RUN=1; shift ;;
@@ -233,7 +244,18 @@ cleanup() { # removes only the scratch directories created above
 }
 trap cleanup EXIT
 
+MEMTOTAL_KB=0
+case "$MEMTOTAL" in
+    auto) MEMTOTAL_KB="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null || true)" ;;
+    persona) MEMTOTAL_KB=0 ;;
+    *) MEMTOTAL_KB="$MEMTOTAL" ;;
+esac
+if ! [[ "${MEMTOTAL_KB:-0}" =~ ^[0-9]+$ ]] || ((MEMTOTAL_KB < 262144)); then
+    MEMTOTAL_KB=0 # unreadable or implausibly small: keep the persona's own figure
+fi
+
 "$PYTHON" "$KIT_DIR/tools/build_fs.py" \
+    --memtotal-kb "$MEMTOTAL_KB" \
     --out "$BUILD/fs.pickle" \
     --overlay "$KIT_DIR/honeyfs-overlay" \
     --userdb "$USERDB_SRC" \

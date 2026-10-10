@@ -128,6 +128,44 @@ def put_file(root, path, data: bytes, uid, gid, mode, mtime, stats):
     return node
 
 
+# ---------------------------------------------------------------- /proc/meminfo
+# Lines that do not grow with installed memory; everything else in kB is scaled.
+MEMINFO_FIXED = ("Vmalloc", "Hugepagesize", "KernelStack", "Percpu", "PageTables", "Bounce")
+
+
+def scale_meminfo(text: str, total_kb: int) -> str:
+    """Rescale the persona's /proc/meminfo so MemTotal equals the real host's. `free` reads the
+    host's meminfo directly, so the two only agree when the persona claims the host's memory."""
+    lines = text.splitlines()
+    persona = next(
+        (int(m.group(1)) for m in (re.match(r"MemTotal:\s+(\d+) kB", x) for x in lines) if m), 0
+    )
+    if persona <= 0 or total_kb <= 0:
+        die("cannot scale meminfo: MemTotal missing or zero")
+    if total_kb == persona:
+        return text
+    ratio = total_kb / persona
+    out = []
+    for line in lines:
+        m = re.match(r"^([A-Za-z_()0-9]+):\s+(\d+) kB$", line)
+        if not m:
+            out.append(line)
+            continue
+        label, value = m.group(1), int(m.group(2))
+        if label == "MemTotal":
+            value = total_kb
+        elif label == "CommitLimit":
+            value = total_kb // 2  # overcommit ratio 50 and no swap
+        elif label.startswith(MEMINFO_FIXED):
+            pass
+        else:
+            value = int(value * ratio)
+            if label == "DirectMap2M":
+                value -= value % 2048  # whole 2 MiB pages
+        out.append(f"{label + ':':<16}{value:>8} kB")
+    return "\n".join(out) + "\n"
+
+
 # ---------------------------------------------------------------- /proc/<pid>
 STATE_NAMES = {
     "R": "running",
@@ -310,6 +348,12 @@ def main() -> None:
     ap.add_argument(
         "--boot-offset", type=int, required=True, help="seconds; must equal [honeypot] boot_offset"
     )
+    ap.add_argument(
+        "--memtotal-kb",
+        type=int,
+        default=0,
+        help="make the persona's MemTotal this many kB (default 0: keep the persona's own)",
+    )
     ap.add_argument("--now", type=int, default=int(time.time()), help=argparse.SUPPRESS)
     a = ap.parse_args()
 
@@ -380,7 +424,10 @@ def main() -> None:
         rel = "/" + f.relative_to(overlay).as_posix()
         if rel in {"/etc/shadow", "/etc/machine-id"}:
             die(f"{rel} is generated; remove it from the overlay")
-        data = render(f.read_text(encoding="utf-8"), tokens).encode("utf-8")
+        text = render(f.read_text(encoding="utf-8"), tokens)
+        if rel == "/proc/meminfo" and a.memtotal_kb:
+            text = scale_meminfo(text, a.memtotal_kb)
+        data = text.encode("utf-8")
         uid = gid = 0
         mode = 0o100644
         m = re.match(r"^/(home/(deploy|ops)|root)/", rel)
@@ -490,6 +537,8 @@ def main() -> None:
     )
     print(f"host keys  : {mirrored} public key(s) mirrored into /etc/ssh")
     print(f"/proc      : {proc_count} process directories, matching `ps`")
+    if a.memtotal_kb:
+        print(f"memory     : persona MemTotal set to {a.memtotal_kb} kB (the host's)")
     print(
         f"identity   : machine-id {machine_id[:8]}..., root UUID {root_uuid[:8]}..., 'installed' {install_days} days ago"
     )

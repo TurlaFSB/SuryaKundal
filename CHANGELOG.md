@@ -9,7 +9,9 @@ All notable changes to this project are recorded here. The format follows
 ### Added
 - Deception test harness (`evaluation/deception_check.py`, `docs/DECEPTION_TESTING.md`): 45 probes
   grouped by attacker class, JSON output, before/after comparison. Stock Cowrie 3.1.1 passes 10 of
-  45; with the kit, 29 of 45 (all but one of the checks configuration can fix).
+  45; with the kit, 30 of 45 (every check configuration can fix).
+- The kit sets the persona's memory to the host's real `MemTotal` at deploy time (scaling the related
+  `/proc/meminfo` fields), so `free` and `/proc/meminfo` agree on any VM. `--memtotal-kb` overrides it.
 - The kit builds a `/proc/<pid>` directory (`cmdline`, `comm`, `status`, `stat`) for every process
   `ps` lists, replacing the two container leftovers; tests keep `ps` and `/proc` in agreement.
 - ATT&CK mapper accuracy set (`evaluation/`, `docs/MAPPER_ACCURACY.md`): 103 hand-labelled

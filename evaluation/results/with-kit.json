@@ -2,14 +2,14 @@
   "label": "with the Surya Kundal kit",
   "summary": {
     "overall": {
-      "passed": 29,
+      "passed": 30,
       "total": 45,
-      "score": 0.644
+      "score": 0.667
     },
     "fixable": {
-      "passed": 29,
+      "passed": 30,
       "total": 30,
-      "score": 0.967
+      "score": 1.0
     },
     "tiers": {
       "1": {
@@ -23,9 +23,9 @@
         "score": 1.0
       },
       "3": {
-        "passed": 6,
+        "passed": 7,
         "total": 15,
-        "score": 0.4
+        "score": 0.467
       },
       "4": {
         "passed": 0,
@@ -246,8 +246,8 @@
       "id": "free-matches-meminfo",
       "tier": 3,
       "title": "`free` and /proc/meminfo report the same memory",
-      "status": "fail",
-      "detail": "/proc/meminfo 4018204 kB, free 8222320 kB",
+      "status": "pass",
+      "detail": "/proc/meminfo 8222320 kB, free 8222320 kB",
       "limit": false,
       "ref": "row 21"
     },
@@ -256,7 +256,7 @@
       "tier": 3,
       "title": "MemTotal is not the value shared by every Cowrie",
       "status": "pass",
-      "detail": "4018204 kB",
+      "detail": "8222320 kB",
       "limit": false,
       "ref": "row 11"
     },

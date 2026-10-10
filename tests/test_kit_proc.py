@@ -1,6 +1,7 @@
 """The kit's fake /proc/<pid> directories must match the ps list the shell prints."""
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -124,3 +125,56 @@ def test_proc_directories_are_read_only_and_owned_by_root():
     bf.add_proc_entries(root, PROCESSES, UIDS, 1_700_000_000, _stats())
     node = bf.lookup(root, "/proc/481")
     assert node[bf.A_MODE] == 0o40555 and node[bf.A_UID] == 0
+
+
+# --- /proc/meminfo follows the real host ----------------------------------------------------
+
+MEMINFO = (Path(__file__).resolve().parents[1] / "cowrie/honeyfs-overlay/proc/meminfo").read_text()
+
+
+def _fields(text):
+    return {
+        m.group(1): int(m.group(2))
+        for m in (re.match(r"^(\S+):\s+(\d+)", line) for line in text.splitlines())
+        if m
+    }
+
+
+def test_meminfo_total_becomes_the_hosts_and_fields_scale_with_it():
+    host = 8095328
+    scaled = _fields(bf.scale_meminfo(MEMINFO, host))
+    original = _fields(MEMINFO)
+    assert scaled["MemTotal"] == host
+    assert scaled["CommitLimit"] == host // 2
+    assert scaled["MemFree"] > original["MemFree"]
+    assert scaled["MemFree"] + scaled["Buffers"] + scaled["Cached"] < scaled["MemTotal"]
+    assert scaled["DirectMap2M"] % 2048 == 0
+
+
+def test_meminfo_fixed_and_zero_fields_do_not_move():
+    scaled = _fields(bf.scale_meminfo(MEMINFO, 8095328))
+    original = _fields(MEMINFO)
+    for name in ("VmallocTotal", "Hugepagesize", "KernelStack", "PageTables", "SwapTotal"):
+        assert scaled[name] == original[name], name
+    assert scaled["HugePages_Total"] == 0 and scaled["Zswap"] == 0
+
+
+def test_meminfo_keeps_the_kernels_column_format():
+    scaled = bf.scale_meminfo(MEMINFO, 8095328)
+    assert len(scaled.splitlines()) == len(MEMINFO.splitlines())
+    for before, after in zip(MEMINFO.splitlines(), scaled.splitlines(), strict=True):
+        assert before.split(":")[0] == after.split(":")[0]
+        if before.endswith(" kB"):
+            assert after.endswith(" kB") and after.index(":") == before.index(":")
+
+
+def test_meminfo_scaling_to_the_same_size_changes_nothing():
+    same = _fields(bf.scale_meminfo(MEMINFO, _fields(MEMINFO)["MemTotal"]))
+    assert same == _fields(MEMINFO)
+
+
+def test_meminfo_scaling_rejects_input_without_memtotal():
+    import pytest
+
+    with pytest.raises(SystemExit):
+        bf.scale_meminfo("Buffers:  10 kB\n", 1000)

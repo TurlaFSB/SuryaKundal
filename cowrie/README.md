@@ -56,9 +56,9 @@ restart Cowrie.
   different users/passwords. The accepted pairs are the only ones that log in;
   there is no wildcard. Passwords are ASCII and cannot contain `:`. If you
   add a user, add it to `honeyfs-overlay/etc/passwd` too or the build fails.
-- Give the VM about 4 GiB RAM. `free` reads the real host, so it only looks
-  right if the VM matches. Set `MemTotal` in `honeyfs-overlay/proc/meminfo`
-  to `grep MemTotal /proc/meminfo` from the VM, then redeploy.
+- Memory: `free` reads the real host, so `deploy.sh` makes the persona's `MemTotal` (and the
+  fields that scale with it) equal this machine's, automatically. Use `--memtotal-kb persona` to
+  keep the kit's 4 GiB figure, or `--memtotal-kb N` to set one. If you resize the VM, redeploy.
 - Hand-written `/proc/cpuinfo`, `lscpu`, `dmesg` are not from real hardware
   (see `honeyfs-overlay/README.md`). Copy from a real Debian 12 VM if you can.
 
