@@ -513,3 +513,46 @@ def test_campaign_pages_survive_an_unmigrated_database(tmp_path):
     client = _client(sessions)
     assert client.get("/campaigns").status_code == 200
     assert client.get("/campaigns/abc").status_code == 404
+
+
+# --- metrics ---------------------------------------------------------------------------------
+
+
+def test_metrics_exposes_numbers_in_prometheus_format(factory):
+    response = _client(factory).get("/metrics")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("text/plain; version=0.0.4")
+    assert "# TYPE surya_kundal_sessions gauge" in body
+    values = {
+        line.split()[0]: float(line.split()[1])
+        for line in body.splitlines()
+        if line and not line.startswith("#") and "{" not in line
+    }
+    assert values["surya_kundal_sessions"] >= 2
+    assert values["surya_kundal_last_session_timestamp_seconds"] > 1_700_000_000
+    assert values["surya_kundal_database_size_bytes"] > 0
+    assert 'surya_kundal_info{version="' in body
+
+
+def test_metrics_never_contain_text_from_the_data(factory):
+    body = _client(factory).get("/metrics").get_data(as_text=True)
+    for line in body.splitlines():
+        assert line.startswith("#") or line.startswith("surya_kundal_")
+    assert "203.0.113" not in body and "root" not in body.replace("# HELP", "")
+
+
+def test_metrics_need_the_password_when_one_is_set(factory):
+    client = _client(factory, token="s3cret-token")
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/metrics", headers=_basic("wrong-token-xx")).status_code == 401
+    assert client.get("/metrics", headers=_basic("s3cret-token")).status_code == 200
+
+
+def test_metrics_report_zero_for_an_empty_database(tmp_path):
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'empty.db'}")
+    init_db(engine)
+    body = _client(make_session_factory(engine)).get("/metrics").get_data(as_text=True)
+    assert "surya_kundal_sessions 0" in body
+    assert "surya_kundal_last_session_timestamp_seconds 0" in body

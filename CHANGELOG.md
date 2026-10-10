@@ -7,6 +7,10 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Operations: `surya-kundal backup` (online, verified, private, optional gzip and rotation),
+  `restore` (refuses to overwrite, keeps what it replaced, rejects damaged or newer-schema files),
+  and `prune --older-than DAYS` (reports first, deletes only with `--yes`, recomputes campaigns).
+  A password-protected Prometheus `/metrics` endpoint. See `docs/OPERATIONS.md`.
 - Deception test harness (`evaluation/deception_check.py`, `docs/DECEPTION_TESTING.md`): 45 probes
   grouped by attacker class, JSON output, before/after comparison. Stock Cowrie 3.1.1 passes 10 of
   45; with the kit, 30 of 45 (every check configuration can fix).

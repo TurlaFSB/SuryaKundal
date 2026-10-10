@@ -139,6 +139,8 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 
 `surya-kundal export` turns the database into indicators other tools can use: attacker addresses, file hashes and download URLs, each with first and last sighting, a confidence score, geography and the ATT&CK techniques seen. See [`docs/IOC_EXPORT.md`](docs/IOC_EXPORT.md) for the formats, the confidence rules and the safety rules.
 
+Running it unattended: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) covers backup and restore, retention (`surya-kundal prune`) and Prometheus metrics.
+
 `surya-kundal campaigns` groups sessions that share a payload, script or tooling fingerprint, with the evidence for each group; see [`docs/CAMPAIGNS.md`](docs/CAMPAIGNS.md).
 
 ## Measured quality

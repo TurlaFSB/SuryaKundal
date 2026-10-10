@@ -29,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from surya_kundal.campaigns import campaign_detail, list_campaigns
-from surya_kundal.dashboard import queries
+from surya_kundal.dashboard import metrics, queries
 from surya_kundal.dashboard.alerts import recent_alerts
 from surya_kundal.database.engine import create_db_engine, make_session_factory
 from surya_kundal.textsafe import printable
@@ -210,6 +210,14 @@ def create_app(
         except Exception:
             return Response("database unavailable", 503, mimetype="text/plain")
         return Response("ok", mimetype="text/plain")
+
+    @app.get("/metrics")
+    def prometheus() -> Response:
+        try:
+            values = cache.get("metrics", lambda: metrics.collect(db()))
+        except Exception:
+            return Response("metrics unavailable", 503, mimetype="text/plain")
+        return Response(metrics.render(values), content_type=metrics.CONTENT_TYPE)
 
     @app.get("/")
     def overview() -> str:

@@ -182,6 +182,38 @@ def _build_parser() -> argparse.ArgumentParser:
     camp_show.add_argument("campaign_id", help="campaign ID or a unique prefix")
     _add_db_option(camp_show)
 
+    backup = sub.add_parser(
+        "backup", help="write a verified copy of the database (safe while the pipeline runs)"
+    )
+    _add_db_option(backup)
+    backup.add_argument(
+        "--directory",
+        type=Path,
+        default=None,
+        help="where to write it (default: a backups folder next to the database)",
+    )
+    backup.add_argument("--keep", type=int, default=None, help="keep only this many newest backups")
+    backup.add_argument("--compress", action="store_true", help="gzip the backup")
+
+    restore = sub.add_parser(
+        "restore", help="replace the database with a backup (stop the pipeline first)"
+    )
+    _add_db_option(restore)
+    restore.add_argument("backup", type=Path, help="backup file written by `backup`")
+    restore.add_argument(
+        "--force", action="store_true", help="replace an existing database (a copy is kept)"
+    )
+
+    prune = sub.add_parser(
+        "prune", help="delete sessions older than a cutoff (shows what it would do unless --yes)"
+    )
+    _add_db_option(prune)
+    prune.add_argument("--older-than", type=int, required=True, metavar="DAYS")
+    prune.add_argument(
+        "--yes", action="store_true", help="actually delete; without it, only report"
+    )
+    prune.add_argument("--vacuum", action="store_true", help="shrink the database file afterwards")
+
     geoip = sub.add_parser("geoip", help="manage and query the offline GeoLite2 databases")
     geo_sub = geoip.add_subparsers(dest="geoip_action", required=True)
     update = geo_sub.add_parser("update", help="download or refresh the GeoLite2 databases")
@@ -362,6 +394,87 @@ def _print_campaign(detail: CampaignDetail) -> int:
 def readonly_database(url: str) -> sessionmaker[Session]:
     """A session factory that cannot write; raises FileNotFoundError if the file is missing."""
     return make_session_factory(create_db_engine(url, read_only=True))
+
+
+def _human_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def _run_backup(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal import maintenance
+
+    url = args.db or settings.database_url
+    try:
+        directory = args.directory or maintenance.sqlite_file(url).parent / "backups"
+        result = maintenance.backup_database(url, directory, keep=args.keep, compress=args.compress)
+    except maintenance.MaintenanceError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"Backed up {result.sessions} session(s) to {result.path} ({_human_size(result.size)}).")
+    for old in result.removed:
+        print(f"Removed old backup {old.name}")
+    return 0
+
+
+def _run_restore(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal import maintenance
+
+    try:
+        result = maintenance.restore_database(
+            args.backup, args.db or settings.database_url, force=args.force
+        )
+    except maintenance.MaintenanceError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"Restored {result.sessions} session(s) to {result.target}.")
+    if result.safety_copy:
+        print(f"The database it replaced is kept at {result.safety_copy}.")
+    return 0
+
+
+def _run_prune(args: argparse.Namespace, settings: Settings) -> int:
+    from surya_kundal import maintenance
+
+    url = args.db or settings.database_url
+    try:
+        maintenance.sqlite_file(url)
+        engine = create_db_engine(url)
+        init_db(engine)
+        with make_session_factory(engine)() as db:
+            result = maintenance.prune_database(
+                db, older_than_days=args.older_than, dry_run=not args.yes
+            )
+            if result.deleted:
+                from surya_kundal.campaigns import build_campaigns
+
+                build_campaigns(db)  # campaign totals must not count sessions that are gone
+                db.commit()
+    except maintenance.MaintenanceError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    when = result.cutoff.strftime("%Y-%m-%d %H:%M UTC")
+    verb = "Deleted" if result.deleted else "Would delete"
+    print(
+        f"{verb} {result.sessions} session(s) that ended before {when}: {result.logins} login(s), "
+        f"{result.commands} command(s), {result.transfers} transfer(s), "
+        f"{result.tunnels} tunnel(s)."
+    )
+    if result.deleted:
+        print(
+            f"Dropped {result.orphan_ips} cached IP lookup(s) and "
+            f"{result.orphan_files} file lookup(s)."
+        )
+        if args.vacuum:
+            before, after = maintenance.vacuum(url)
+            print(f"Database file {_human_size(before)} -> {_human_size(after)}.")
+    elif result.sessions:
+        print("Nothing was changed. Back up first (`surya-kundal backup`), then add --yes.")
+    return 0
 
 
 def _run_wazuh_rules(args: argparse.Namespace, settings: Settings) -> int:
@@ -735,6 +848,9 @@ def main(argv: list[str] | None = None) -> int:
         "wazuh-rules": _run_wazuh_rules,
         "export": _run_export,
         "campaigns": _run_campaigns,
+        "backup": _run_backup,
+        "restore": _run_restore,
+        "prune": _run_prune,
         "dashboard": _run_dashboard,
         "doctor": _run_doctor,
     }
