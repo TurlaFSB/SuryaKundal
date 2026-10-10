@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from io import BufferedReader
 from pathlib import Path
 from typing import BinaryIO
 
@@ -111,6 +112,12 @@ class LogTailer:
             if stat.st_ino == inode and offset <= stat.st_size:
                 handle.seek(offset)
                 logger.info("Resuming %s at byte %d", self.path, offset)
+            elif (older := self._find_rotated(inode, offset)) is not None:
+                # The log was rotated while we were stopped: finish the old file first. The normal
+                # rotation handling then moves on to the new file by itself.
+                handle.close()
+                handle = older
+                logger.info("Resuming the rotated log %s at byte %d", older.name, offset)
             elif skip_history:
                 handle.seek(0, os.SEEK_END)
         elif skip_history:
@@ -119,6 +126,24 @@ class LogTailer:
         self._partial = b""
         logger.info("Following %s", self.path)
         return True
+
+    def _find_rotated(self, inode: int, offset: int) -> BufferedReader | None:
+        """The rotated copy (``cowrie.json.DATE``) of the log we were reading, at ``offset``."""
+        try:
+            candidates = sorted(self.path.parent.glob(self.path.name + ".*"), reverse=True)[:30]
+        except OSError:
+            return None
+        for candidate in candidates:
+            try:
+                handle = candidate.open("rb")
+            except OSError:
+                continue
+            stat = os.fstat(handle.fileno())
+            if stat.st_ino == inode and offset <= stat.st_size:
+                handle.seek(offset)
+                return handle
+            handle.close()
+        return None
 
     def _close(self) -> None:
         if self._handle is not None:

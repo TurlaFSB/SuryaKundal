@@ -7,6 +7,10 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- After a restart across Cowrie's daily log rotation, the watcher first reads the rotated file to the end,
+  so events written just before the rotation are not lost.
+- Dashboard dependency pinned to `werkzeug>=3.1.9` (fixes CVE-2026-102598).
+- CI now shellchecks every script in `cowrie/` and `wazuh/`; Dependabot also watches the Cowrie image.
 - Ingestion no longer stops on odd log content: every field is type-checked and size-capped, one
   session that fails cannot affect the others, and a locked database retries the whole batch
   instead of waiting out the lock once per session. Lines of deep nesting or digit floods are skipped.

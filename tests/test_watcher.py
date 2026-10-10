@@ -391,3 +391,37 @@ def test_cli_watch_starts_the_watcher_with_the_given_options(
         "from_end": True,
         "stop_is_event": True,
     }
+
+
+def test_restart_after_rotation_still_reads_the_end_of_the_old_log(tmp_path):
+    """The service was stopped while Cowrie rotated the log: nothing in the old file is lost."""
+    log = tmp_path / "cowrie.json"
+    log.write_text("one\ntwo\n")
+    first = LogTailer(log)
+    assert first.read_new_lines() == ["one", "two"]
+    resume = first.position()
+    first.close()
+
+    log.write_text("one\ntwo\nthree\nfour\n")  # written before the rotation, while we were down
+    log.rename(tmp_path / "cowrie.json.2026-10-09")
+    log.write_text("five\nsix\n")  # the new log
+
+    again = LogTailer(log, resume=resume)
+    assert again.read_new_lines() == ["three", "four", "five", "six"]
+    again.close()
+
+
+def test_restart_when_the_old_log_is_gone_starts_the_new_one_from_the_top(tmp_path):
+    log = tmp_path / "cowrie.json"
+    log.write_text("one\n")
+    first = LogTailer(log)
+    first.read_new_lines()
+    resume = first.position()
+    first.close()
+    fresh = tmp_path / "fresh"
+    fresh.write_text("two\n")  # created before the old file goes, so it cannot reuse its inode
+    log.unlink()
+    fresh.rename(log)
+    again = LogTailer(log, resume=resume)
+    assert again.read_new_lines() == ["two"]
+    again.close()

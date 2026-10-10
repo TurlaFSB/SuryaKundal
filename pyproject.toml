@@ -36,6 +36,7 @@ surya-kundal = "surya_kundal.cli:main"
 [project.optional-dependencies]
 dashboard = [
     "flask>=3.0",
+    "werkzeug>=3.1.9",
     "waitress>=3.0",
 ]
 evaluation = [
@@ -54,6 +55,7 @@ dev = [
     "pyyaml>=6.0",
     "stix2>=3.0",
     "flask>=3.0",
+    "werkzeug>=3.1.9",
     "waitress>=3.0",
 ]
 

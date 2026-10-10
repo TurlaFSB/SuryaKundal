@@ -42,8 +42,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
-      - name: ShellCheck the egress firewall script
-        run: shellcheck cowrie/egress.sh
+      - name: ShellCheck every shell script
+        run: shellcheck cowrie/*.sh wazuh/*.sh
       - run: mypy
 
   package:
