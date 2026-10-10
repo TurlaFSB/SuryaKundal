@@ -8,6 +8,7 @@
 [![CodeQL](https://github.com/TurlaFSB/SuryaKundal/actions/workflows/codeql.yml/badge.svg)](https://github.com/TurlaFSB/SuryaKundal/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/TurlaFSB/SuryaKundal)](https://github.com/TurlaFSB/SuryaKundal/releases)
 [![ATT&CK v19](https://img.shields.io/badge/MITRE%20ATT%26CK-v19-red)](https://attack.mitre.org/)
 
 </div>
@@ -22,17 +23,23 @@ Surya Kundal is the analysis layer for a [Cowrie](https://github.com/cowrie/cowr
 ## Contents
 
 - [Features](#features)
+- [Why this exists](#why-this-exists)
 - [Architecture](#architecture)
 - [Quick start](#quick-start)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Components](#components)
+- [Documentation](#documentation)
 - [Design and engineering](#design-and-engineering)
 - [Limitations](#limitations)
 - [Security](#security)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License and acknowledgements](#license-and-acknowledgements)
+
+## Why this exists
+
+A stock honeypot produces a log, not an answer. Raw `cowrie.json` is a stream of low-level events; an analyst wants to know *who came, what they tried, whether it was the same actor as last week, and what to block*. Surya Kundal closes that gap with a small, auditable pipeline that runs on a single free-tier server, and it is deliberately honest about what it cannot do (see [Limitations](#limitations)).
 
 ## Features
 
@@ -44,6 +51,9 @@ Surya Kundal is the analysis layer for a [Cowrie](https://github.com/cowrie/cowr
 | **ATT&CK mapping** | 70+ reviewable rules map commands, logins, transfers and tunnelling to techniques. Each rule carries positive and negative examples, and every technique ID is validated against the vendored ATT&CK Enterprise v19 catalogue. |
 | **SIEM integration** | Wazuh rules generated from the same ATT&CK rules, so the database and the SIEM agree. Includes brute-force, rapid-reconnaissance and honeypot-fingerprinting alerts. |
 | **Dashboard** | Attack map, session-depth funnel, fingerprinting-attempt panel, ATT&CK matrix, session drill-down and optional Wazuh alerts. Server-rendered, read-only, strict Content-Security-Policy. |
+| **Campaigns and IOC export** | Groups sessions that share a payload, script or tooling fingerprint, with the evidence for each link. Exports indicators (CSV, STIX 2.1, blocklist, nftables) with confidence scores; addresses that were only typed in commands are labelled unverified and need several independent sources. |
+| **Your own traffic stays out** | Sessions from private, loopback and configured networks (`INTERNAL_NETWORKS`) are tagged and excluded from the dashboard, exports and campaigns, so testing never pollutes real data. |
+| **Egress control** | `cowrie/egress.sh` blocks everything the honeypot could use to attack others or reach your network, fails closed while containers rebuild, and verifies itself from inside the container. |
 | **Deception kit** | Hardened Cowrie configuration, a believable Debian filesystem and login policy, and a documented threat model of what still gives a honeypot away. |
 
 ## Architecture
@@ -100,6 +110,18 @@ ssh -p 2222 root@127.0.0.1                 # try the honeypot (weak passwords ar
 - **Pipeline and dashboard** read the honeypot's log through a shared read-only volume. To analyse a Cowrie that runs elsewhere, set `COWRIE_LOG_DIR` and omit the profile: `docker compose up -d --build`.
 - Only the pipeline receives `.env` (API keys for enrichment). The honeypot and dashboard get no other secrets.
 - The dashboard is published on `http://127.0.0.1:8080` only; the password is `DASHBOARD_TOKEN`. `docker compose logs -f cowrie` follows the honeypot.
+
+## Releases
+
+Tagged versions publish container images to GitHub Container Registry. Each image is signed with keyless Cosign and ships a CycloneDX SBOM, so you can check what you run:
+
+```bash
+cosign verify ghcr.io/turlafsb/surya-kundal:<version> \
+  --certificate-identity-regexp '^https://github.com/TurlaFSB/SuryaKundal/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+See the [CHANGELOG](CHANGELOG.md) for what changed in each version.
 
 ## Usage
 
@@ -240,11 +262,25 @@ tests/             Unit, property-based, migration, dashboard and CLI tests
 - **Time and integrity.** Timezone-aware UTC throughout, foreign keys enforced, WAL mode so a reader can work while the importer writes.
 - **Quality gates in CI.** On every push: the test suite on Python 3.11, 3.13 and 3.14 with a 90% coverage floor (currently about 95%), ruff lint and format including security rules, strict mypy, a wheel build exercised from a clean environment, `pip-audit` and CodeQL. Dependabot keeps dependencies current.
 
+## Documentation
+
+| Guide | Read it when |
+|---|---|
+| [`docs/DEPLOYMENT_AWS.md`](docs/DEPLOYMENT_AWS.md) | putting the honeypot on a cloud server, step by step |
+| [`docs/EGRESS.md`](docs/EGRESS.md) | restricting what the honeypot can reach (read before exposing it) |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | backups, retention, metrics, your own traffic |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | understanding the platform's risks and what still gives a honeypot away |
+| [`docs/IOC_EXPORT.md`](docs/IOC_EXPORT.md) | sharing indicators with other tools |
+| [`docs/CAMPAIGNS.md`](docs/CAMPAIGNS.md) | how sessions are grouped, and what does not link them |
+| [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md), [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md) | the measured results |
+| [`wazuh/README.md`](wazuh/README.md), [`cowrie/README.md`](cowrie/README.md) | the SIEM rules and the honeypot kit |
+
 ## Limitations
 
 - ATT&CK mapping is pattern matching, not a shell interpreter. It does not follow variables or decode payloads, and a rule's confidence describes how specific its pattern is, not how dangerous the command is.
 - Wazuh cannot split command lines, so its rules are a coarser view than the database mapping. The database is the complete record.
 - Cowrie is an emulation. A capable adversary can still recognise it; see [`cowrie/FINGERPRINTING.md`](cowrie/FINGERPRINTING.md) for the residual tells.
+- Egress is blocked by default, so a malware download is recorded as an *attempted* fetch (the address) and not as a captured file. `captures` mode, described in [`docs/EGRESS.md`](docs/EGRESS.md), allows controlled retrieval.
 - GeoLite2 locations are approximate, and the project has not yet been run against real internet traffic (see the roadmap).
 
 ## Security
@@ -268,7 +304,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); t
 | 5 | Wazuh rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Web dashboard | Done |
 | 7 | Docker Compose for the full stack | Done: pipeline, dashboard and honeypot containers, image scanning, SBOM |
-| 8 | Cloud deployment and real-world data collection | Planned |
+| 8 | Cloud deployment and real-world data collection | In progress: v0.2.0 released, deployment guide written and audited |
 | 9 | Write-up and demonstration | Planned |
 
 Only free tiers and free offline datasets are used; no paid service is required.

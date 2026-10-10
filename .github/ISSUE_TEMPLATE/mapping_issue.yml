@@ -1,0 +1,23 @@
+name: Wrong ATT&CK mapping
+description: A command was mapped to the wrong technique, or not mapped
+labels: [mapping]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: The command
+      description: The exact command text, with any real addresses removed.
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: Technique you expected
+      placeholder: T1105
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What the mapper returned
+      description: Output of `surya-kundal show <session-id>`.

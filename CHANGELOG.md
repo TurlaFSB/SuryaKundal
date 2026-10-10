@@ -22,6 +22,9 @@ All notable changes to this project are recorded here. The format follows
   same hosts, and the campaign rebuild uses less memory.
 
 ### Added
+- Community files: a fuller CONTRIBUTING guide, a Code of Conduct, issue forms (bug, wrong ATT&CK mapping,
+  feature) and a pull request template. The README gains a documentation index, release verification
+  steps and a short statement of purpose.
 - `docs/DEPLOYMENT_AWS.md`: ordered, checked steps for a single-server deployment (honeypot on port 22,
   administration moved to 22222 from one address, metadata service locked, egress control, dashboard
   through an SSH tunnel). `COWRIE_PORT` sets the host port the honeypot listens on.

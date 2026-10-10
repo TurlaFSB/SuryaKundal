@@ -1,0 +1,29 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, or a minimal Cowrie log line with any real addresses removed.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `surya-kundal --version`, or the image tag.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment and logs
+      description: Operating system, Docker or pip install, and the output of `surya-kundal doctor`. Never paste API keys or the dashboard token.
