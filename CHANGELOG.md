@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Added
 - The Wazuh alerts export now reaches the dashboard container: `wazuh/export-alerts.sh` writes to
   `data/wazuh/`, which the dashboard mounts read-only (it previously wrote a host file the container
