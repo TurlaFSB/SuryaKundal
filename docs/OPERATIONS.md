@@ -101,3 +101,18 @@ log volume or the pipeline stopped; and a database that grows faster than expect
 
 These are gauges of what is stored, so they fall after a prune. They show the data, not the
 processes: container health still comes from `docker compose ps` and the Compose health checks.
+
+## Egress firewall
+
+The honeypot's outbound firewall (`cowrie/egress.sh`, explained in [EGRESS.md](EGRESS.md)) is host
+state, outside the containers, so check it as part of routine care:
+
+- **After a reboot, a Docker upgrade or a Docker restart:** `sudo ./cowrie/egress.sh status`. It must
+  report `mode=deny` (or `captures`). If it says "not applied", run `sudo ./cowrie/egress.sh apply deny`.
+- **After any change to `compose.yaml`'s network settings, or before exposing the honeypot to the
+  internet:** `sudo ./cowrie/egress.sh verify`. Every line must say `PASS`.
+- **Attempts the firewall stopped** are in the kernel log: `journalctl -k | grep surya-egress-drop`.
+  A steady trickle means attackers are trying to use the honeypot to reach out; that is expected.
+- **To stand it down** (for example while debugging networking): `sudo ./cowrie/egress.sh remove`, and
+  apply it again afterwards. The boot unit is removed with `sudo ./cowrie/egress.sh uninstall`.
+
