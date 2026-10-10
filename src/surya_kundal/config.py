@@ -21,7 +21,7 @@ DEFAULT_LOG_PATH = "~/cowrie/var/log/cowrie/cowrie.json"
 DEFAULT_DATABASE_URL = "sqlite:///data/surya_kundal.db"
 DEFAULT_GEOIP_DIR = "data/geoip"
 DEFAULT_TOR_CACHE = "data/tor_exit_nodes.txt"
-DEFAULT_WAZUH_ALERTS = "data/wazuh_alerts.jsonl"
+DEFAULT_WAZUH_ALERTS = "data/wazuh/wazuh_alerts.jsonl"
 
 
 @dataclass(frozen=True)

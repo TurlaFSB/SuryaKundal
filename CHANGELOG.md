@@ -7,6 +7,9 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- The Wazuh alerts export now reaches the dashboard container: `wazuh/export-alerts.sh` writes to
+  `data/wazuh/`, which the dashboard mounts read-only (it previously wrote a host file the container
+  could not see). The docs note that the manager needs about 4 GB of RAM.
 - Your own traffic no longer passes for attackers. Sessions from loopback, private ranges, the Docker
   bridges (so the deception harness and your test logins) and anything listed in `INTERNAL_NETWORKS`
   are marked internal (migration 0010; existing sessions are classified once). The dashboard,

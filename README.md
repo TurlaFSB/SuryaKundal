@@ -169,7 +169,7 @@ Settings come from the environment or an untracked `.env` file. Every variable i
 | `MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY` | GeoLite2 download credentials | unset |
 | `GEOIP_DB_DIR` | GeoLite2 database directory | `data/geoip` |
 | `TOR_EXIT_LIST_PATH` | Cached Tor exit list | `data/tor_exit_nodes.txt` |
-| `WAZUH_ALERTS_PATH` | Wazuh alert export shown on the dashboard | `data/wazuh_alerts.jsonl` |
+| `WAZUH_ALERTS_PATH` | Wazuh alert export shown on the dashboard | `data/wazuh/wazuh_alerts.jsonl` |
 | `DASHBOARD_TOKEN` | Dashboard password; required to listen beyond localhost | unset |
 | `LOG_LEVEL` | Logging verbosity | `INFO` |
 
@@ -181,7 +181,7 @@ A small, server-rendered Flask application served by waitress. It is read-only b
 
 ### Wazuh
 
-[`wazuh/`](wazuh/README.md) contains the generated rules, a manager-only Docker Compose file, sample events and `logtest.sh`, which verifies every sample against a real manager. Rules are tagged with ATT&CK techniques and verified on Wazuh 4.14.7. `wazuh/export-alerts.sh` copies the alerts into a file the dashboard can display.
+[`wazuh/`](wazuh/README.md) contains the generated rules, a manager-only Docker Compose file, sample events and `logtest.sh`, which verifies every sample against a real manager. Rules are tagged with ATT&CK techniques and verified on Wazuh 4.14.7. `wazuh/export-alerts.sh` copies the alerts into `data/wazuh/`, which the dashboard container reads (create the folder once with `mkdir -p data/wazuh`). The manager wants about 4 GB of RAM, so on a small cloud instance run it on another machine.
 
 ### Deception kit
 

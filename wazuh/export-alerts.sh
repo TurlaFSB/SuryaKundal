@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Copy the Surya Kundal alerts out of the Wazuh manager so the dashboard can show them.
 # Run it from cron or by hand:  wazuh/export-alerts.sh [output-file]
+# The default output, data/wazuh/wazuh_alerts.jsonl, is the folder the dashboard container reads.
 #
 # The previous export is only replaced when the copy succeeded, so a stopped container
 # or a Docker error leaves the dashboard showing the last good data.
 set -euo pipefail
 umask 077  # alerts contain attacker commands; never world-readable, not even briefly
 
-OUT="${1:-data/wazuh_alerts.jsonl}"
+OUT="${1:-data/wazuh/wazuh_alerts.jsonl}"
 CONTAINER="${WAZUH_CONTAINER:-surya-wazuh-manager}"
 SOURCE="/var/ossec/logs/alerts/alerts.json"
 

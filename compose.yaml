@@ -109,7 +109,7 @@ services:
     command: ["dashboard", "--host", "0.0.0.0", "--port", "8080"]
     environment:
       DATABASE_URL: sqlite:////data/surya_kundal.db
-      WAZUH_ALERTS_PATH: /data/wazuh_alerts.jsonl
+      WAZUH_ALERTS_PATH: /alerts/wazuh_alerts.jsonl
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:?set DASHBOARD_TOKEN in .env (12+ characters)}
       # Not a secret: show the operator's own (internal) sessions too. See docs/OPERATIONS.md.
       DASHBOARD_SHOW_INTERNAL: ${DASHBOARD_SHOW_INTERNAL:-}
@@ -120,6 +120,9 @@ services:
       # Not :ro on purpose: SQLite's WAL mode needs its -shm file even to read. The app
       # opens the database query_only and has no write routes.
       - surya_data:/data
+      # Where wazuh/export-alerts.sh writes (run `mkdir -p data/wazuh` once, as your own user).
+      # Read-only; an empty folder just means no alerts panel.
+      - ${WAZUH_EXPORT_DIR:-./data/wazuh}:/alerts:ro
     depends_on:
       pipeline:
         condition: service_healthy
