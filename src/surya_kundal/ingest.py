@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from surya_kundal.database.repository import save_session
@@ -35,8 +35,12 @@ def store_events(db: Session, events: Iterable[dict]) -> IngestResult:
         try:
             with db.begin_nested():
                 save_session(db, session_id, summarize(session_events))
-        except (SQLAlchemyError, ValueError):
-            logger.exception("Could not store session %s", session_id)
+        except OperationalError:
+            # A locked or unavailable database affects every session, not just this one: let the
+            # caller retry the whole batch instead of waiting out the lock once per session.
+            raise
+        except Exception:  # one bad session must never stop the others, whatever it contains
+            logger.exception("Could not store session %r", session_id)
             failed_ids.append(session_id)
         else:
             saved += 1
