@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Release pipeline (`release.yml`): a version tag builds both images, publishes them to GHCR, signs each by digest with Sigstore (keyless) and attaches a CycloneDX bill of materials to the GitHub release. CI also scans the full git history for secrets with Gitleaks.
 - Operations: `surya-kundal backup` (online, verified, private, optional gzip and rotation),
   `restore` (refuses to overwrite, keeps what it replaced, rejects damaged or newer-schema files),
   and `prune --older-than DAYS` (reports first, deletes only with `--yes`, recomputes campaigns).
