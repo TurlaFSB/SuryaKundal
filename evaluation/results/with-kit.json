@@ -1,0 +1,444 @@
+{
+  "label": "with the Surya Kundal kit",
+  "summary": {
+    "overall": {
+      "passed": 28,
+      "total": 45,
+      "score": 0.622
+    },
+    "fixable": {
+      "passed": 28,
+      "total": 30,
+      "score": 0.933
+    },
+    "tiers": {
+      "1": {
+        "passed": 7,
+        "total": 7,
+        "score": 1.0
+      },
+      "2": {
+        "passed": 16,
+        "total": 16,
+        "score": 1.0
+      },
+      "3": {
+        "passed": 5,
+        "total": 15,
+        "score": 0.333
+      },
+      "4": {
+        "passed": 0,
+        "total": 7,
+        "score": 0.0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "banner-not-default",
+      "tier": 1,
+      "title": "SSH banner is not a stock Cowrie string",
+      "status": "pass",
+      "detail": "SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u10",
+      "limit": false,
+      "ref": "row 1"
+    },
+    {
+      "id": "banner-current-openssh",
+      "tier": 1,
+      "title": "Banner claims a recent OpenSSH, not a 10-year-old one",
+      "status": "pass",
+      "detail": "SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u10",
+      "limit": false,
+      "ref": "row 1"
+    },
+    {
+      "id": "no-prelogin-text",
+      "tier": 1,
+      "title": "No text shown before login",
+      "status": "pass",
+      "detail": "none",
+      "limit": false,
+      "ref": ""
+    },
+    {
+      "id": "wildcard-login-refused",
+      "tier": 1,
+      "title": "A random password for root is refused",
+      "status": "pass",
+      "detail": "refused",
+      "limit": false,
+      "ref": "row 4"
+    },
+    {
+      "id": "default-credentials-refused",
+      "tier": 1,
+      "title": "Well-known default credentials are refused",
+      "status": "pass",
+      "detail": "all refused",
+      "limit": false,
+      "ref": "row 4"
+    },
+    {
+      "id": "hostname-not-default",
+      "tier": 1,
+      "title": "Hostname is not a stock Cowrie or T-Pot name",
+      "status": "pass",
+      "detail": "stg-util02",
+      "limit": false,
+      "ref": "row 2"
+    },
+    {
+      "id": "hostkey-rsa-3072",
+      "tier": 1,
+      "title": "RSA host key is at least 3072 bits (Debian default)",
+      "status": "pass",
+      "detail": "3072 bits",
+      "limit": false,
+      "ref": "row 12"
+    },
+    {
+      "id": "hostname-views-agree",
+      "tier": 2,
+      "title": "hostname, uname -n and /etc/hostname agree",
+      "status": "pass",
+      "detail": "stg-util02",
+      "limit": false,
+      "ref": "row 3"
+    },
+    {
+      "id": "os-release-filled",
+      "tier": 2,
+      "title": "/etc/os-release is not empty and says Debian 12",
+      "status": "pass",
+      "detail": "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"",
+      "limit": false,
+      "ref": "row 6"
+    },
+    {
+      "id": "debian-version-matches",
+      "tier": 2,
+      "title": "/etc/debian_version agrees with os-release",
+      "status": "pass",
+      "detail": "12.15",
+      "limit": false,
+      "ref": "row 5"
+    },
+    {
+      "id": "no-container-artifacts",
+      "tier": 2,
+      "title": "No Docker or VirtualBox leftovers",
+      "status": "pass",
+      "detail": "clean",
+      "limit": false,
+      "ref": "row 5"
+    },
+    {
+      "id": "no-default-user-phil",
+      "tier": 2,
+      "title": "The stock account 'phil' does not exist",
+      "status": "pass",
+      "detail": "absent",
+      "limit": false,
+      "ref": "row 5"
+    },
+    {
+      "id": "uname-matches-proc-version",
+      "tier": 2,
+      "title": "uname -r appears in /proc/version",
+      "status": "pass",
+      "detail": "6.1.0-50-amd64",
+      "limit": false,
+      "ref": "row 9"
+    },
+    {
+      "id": "kernel-not-default",
+      "tier": 2,
+      "title": "Kernel is not the stock Cowrie one",
+      "status": "pass",
+      "detail": "6.1.0-50-amd64",
+      "limit": false,
+      "ref": "row 9"
+    },
+    {
+      "id": "ssh-version-matches-banner",
+      "tier": 2,
+      "title": "`ssh -V` inside the shell matches the banner",
+      "status": "pass",
+      "detail": "banner OpenSSH_9.2p1, shell OpenSSH_9.2p1",
+      "limit": false,
+      "ref": "row 8"
+    },
+    {
+      "id": "sshd-config-filled",
+      "tier": 2,
+      "title": "/etc/ssh/sshd_config has content",
+      "status": "pass",
+      "detail": "3269 bytes",
+      "limit": false,
+      "ref": "row 6"
+    },
+    {
+      "id": "df-works",
+      "tier": 2,
+      "title": "`df -h` runs and lists a root filesystem",
+      "status": "pass",
+      "detail": "Filesystem      Size  Used Avail Use% Mounted on",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "mount-modern",
+      "tier": 2,
+      "title": "`mount` shows no ext3 or VirtualBox",
+      "status": "pass",
+      "detail": "ok",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "dmesg-matches-kernel",
+      "tier": 2,
+      "title": "dmesg is from the claimed kernel, not a 2009 one",
+      "status": "pass",
+      "detail": "[    0.000000] Linux version 6.1.0-50-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.176-1 (",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "ps-no-virtualbox",
+      "tier": 2,
+      "title": "`ps` shows no VirtualBox services",
+      "status": "pass",
+      "detail": "ok",
+      "limit": false,
+      "ref": "row 10"
+    },
+    {
+      "id": "top-runs",
+      "tier": 2,
+      "title": "`top` produces a normal header",
+      "status": "pass",
+      "detail": "top - 09:41:07 up 57 days,  4:12,  1 user,  load average: 0.00, 0.01, 0.00",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "getconf-64bit",
+      "tier": 2,
+      "title": "getconf LONG_BIT says 64",
+      "status": "pass",
+      "detail": "64",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "root-shell-bash",
+      "tier": 2,
+      "title": "Accounts use /bin/bash like a Debian 12 install",
+      "status": "pass",
+      "detail": "root:x:0:0:root:/root:/bin/bash",
+      "limit": false,
+      "ref": "row 5"
+    },
+    {
+      "id": "free-matches-meminfo",
+      "tier": 3,
+      "title": "`free` and /proc/meminfo report the same memory",
+      "status": "fail",
+      "detail": "/proc/meminfo 4018204 kB, free 8222320 kB",
+      "limit": false,
+      "ref": "row 21"
+    },
+    {
+      "id": "meminfo-not-default",
+      "tier": 3,
+      "title": "MemTotal is not the value shared by every Cowrie",
+      "status": "pass",
+      "detail": "4018204 kB",
+      "limit": false,
+      "ref": "row 11"
+    },
+    {
+      "id": "cpu-views-agree",
+      "tier": 3,
+      "title": "lscpu and /proc/cpuinfo name the same CPU",
+      "status": "pass",
+      "detail": "cpuinfo 'Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz', lscpu 'Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz'",
+      "limit": false,
+      "ref": "row 7"
+    },
+    {
+      "id": "cpu-not-default",
+      "tier": 3,
+      "title": "CPU model is not the one shared by every Cowrie",
+      "status": "pass",
+      "detail": "Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz",
+      "limit": false,
+      "ref": "row 11"
+    },
+    {
+      "id": "uptime-consistent",
+      "tier": 3,
+      "title": "`uptime` agrees with /proc/uptime",
+      "status": "pass",
+      "detail": "/proc/uptime 57.1 d, uptime 57 d",
+      "limit": false,
+      "ref": "row 13"
+    },
+    {
+      "id": "ls-size-matches-wc",
+      "tier": 3,
+      "title": "ls -l size equals wc -c for a file",
+      "status": "pass",
+      "detail": "ls 11, wc 11",
+      "limit": false,
+      "ref": "row 6"
+    },
+    {
+      "id": "proc-has-many-pids",
+      "tier": 3,
+      "title": "/proc lists a realistic number of processes",
+      "status": "fail",
+      "detail": "2 process directories",
+      "limit": false,
+      "ref": "row 5"
+    },
+    {
+      "id": "dir-link-counts",
+      "tier": 3,
+      "title": "Directories have link counts above 1",
+      "status": "fail",
+      "detail": "/etc has 1",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "dpkg-populated",
+      "tier": 3,
+      "title": "The package database is populated",
+      "status": "fail",
+      "detail": "1 lines",
+      "limit": true,
+      "ref": "row 6"
+    },
+    {
+      "id": "ip-command",
+      "tier": 3,
+      "title": "`ip a` exists, as on any Debian 12",
+      "status": "fail",
+      "detail": "bash: line 1: ip: command not found",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "sudo-l-sane",
+      "tier": 3,
+      "title": "`sudo -l` gives a sensible answer",
+      "status": "fail",
+      "detail": "sudo: illegal option -- l",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "ls-date-format",
+      "tier": 3,
+      "title": "`ls -l` dates look like GNU ls (May  4 14:44), not ISO",
+      "status": "fail",
+      "detail": "-rw-r--r-- 1 root root 11 2025-07-27 01:49 /etc/hostname",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "grep-count-in-pipe",
+      "tier": 3,
+      "title": "`grep -c` works on piped input",
+      "status": "fail",
+      "detail": "'hello'",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "wc-multiple-files",
+      "tier": 3,
+      "title": "`wc -c a b` prints a line per file plus a total",
+      "status": "fail",
+      "detail": "1 lines",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "echo-dollar-zero",
+      "tier": 3,
+      "title": "`echo $0` names the shell",
+      "status": "fail",
+      "detail": "''",
+      "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "exec-acknowledged",
+      "tier": 4,
+      "title": "Acknowledges an exec request before closing the channel",
+      "status": "fail",
+      "detail": "channel closed before any reply",
+      "limit": true,
+      "ref": "row 20"
+    },
+    {
+      "id": "accepts-ssh-2-x",
+      "tier": 4,
+      "title": "Accepts any 2.x protocol version like OpenSSH",
+      "status": "fail",
+      "detail": "server said: Protocol major versions differ",
+      "limit": true,
+      "ref": "row 15"
+    },
+    {
+      "id": "offers-chacha20",
+      "tier": 4,
+      "title": "Offers chacha20-poly1305, the OpenSSH default cipher",
+      "status": "fail",
+      "detail": "3 offered",
+      "limit": true,
+      "ref": "row 18"
+    },
+    {
+      "id": "offers-aes-gcm",
+      "tier": 4,
+      "title": "Offers AES-GCM ciphers",
+      "status": "fail",
+      "detail": "3 offered",
+      "limit": true,
+      "ref": "row 18"
+    },
+    {
+      "id": "offers-sntrup761",
+      "tier": 4,
+      "title": "Offers the post-quantum key exchange OpenSSH 9.x defaults to",
+      "status": "fail",
+      "detail": "7 offered",
+      "limit": true,
+      "ref": "row 18"
+    },
+    {
+      "id": "offers-rsa-sha2",
+      "tier": 4,
+      "title": "Offers rsa-sha2-512 host key signatures",
+      "status": "fail",
+      "detail": "3 offered",
+      "limit": true,
+      "ref": "row 18"
+    },
+    {
+      "id": "offers-etm-macs",
+      "tier": 4,
+      "title": "Offers -etm MACs",
+      "status": "fail",
+      "detail": "3 offered",
+      "limit": true,
+      "ref": "row 18"
+    }
+  ]
+}

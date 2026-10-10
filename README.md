@@ -139,6 +139,15 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 
 `surya-kundal export` turns the database into indicators other tools can use: attacker addresses, file hashes and download URLs, each with first and last sighting, a confidence score, geography and the ATT&CK techniques seen. See [`docs/IOC_EXPORT.md`](docs/IOC_EXPORT.md) for the formats, the confidence rules and the safety rules.
 
+`surya-kundal campaigns` groups sessions that share a payload, script or tooling fingerprint, with the evidence for each group; see [`docs/CAMPAIGNS.md`](docs/CAMPAIGNS.md).
+
+## Measured quality
+
+Two harnesses in [`evaluation/`](evaluation/) give numbers instead of claims:
+
+- **ATT&CK mapper**: 103 hand-labelled commands; first run precision 0.90, recall 0.93, then fixed. See [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md).
+- **Honeypot deception**: 45 probes grouped by attacker class. Stock Cowrie passes 10, with the kit 28, and every check configuration can fix except two. See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
+
 ```bash
 surya-kundal export --format stix --output iocs.json          # STIX 2.1 for MISP, OpenCTI and others
 surya-kundal export --format nftables --output block.nft      # firewall set whose entries expire

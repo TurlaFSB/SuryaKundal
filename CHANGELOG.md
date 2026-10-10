@@ -7,6 +7,9 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Deception test harness (`evaluation/deception_check.py`, `docs/DECEPTION_TESTING.md`): 45 probes
+  grouped by attacker class, JSON output, before/after comparison. Stock Cowrie 3.1.1 passes 10 of
+  45; with the kit, 28 of 45 (all but two of the checks configuration can fix).
 - ATT&CK mapper accuracy set (`evaluation/`, `docs/MAPPER_ACCURACY.md`): 103 hand-labelled
   commands, a scoring script, and a test that fails if precision or recall fall below 0.97.
   The first run scored precision 0.90 and recall 0.93.

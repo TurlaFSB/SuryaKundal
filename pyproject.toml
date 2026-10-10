@@ -38,6 +38,10 @@ dashboard = [
     "flask>=3.0",
     "waitress>=3.0",
 ]
+evaluation = [
+    "paramiko>=3.4",
+    "cryptography>=42",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
