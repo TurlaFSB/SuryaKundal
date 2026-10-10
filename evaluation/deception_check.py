@@ -29,6 +29,7 @@ import secrets
 import socket
 import struct
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -526,6 +527,55 @@ def _(p: Probe):
 def _(p: Probe):
     line = next((x for x in p.run("cat /etc/passwd").splitlines() if x.startswith("root:")), "")
     return line.endswith("/bin/bash"), line or "no root entry"
+
+
+FETCH_SLOW_SECONDS = 20  # a resolver that is down fails in a second or two, not after a minute
+
+
+def _timed(p: Probe, command: str) -> tuple[str, float]:
+    started = time.monotonic()
+    out = p.run(command)
+    return out, time.monotonic() - started
+
+
+@check(
+    "wget-failure-realistic",
+    2,
+    "A `wget` that fails looks like real wget, and fails fast",
+    ref="row 23",
+)
+def _(p: Probe):
+    out, took = _timed(p, "wget http://example.com/x.sh")
+    resolve_failed = (
+        r"Resolving example\.com \(example\.com\)\.\.\. "
+        r"failed: Temporary failure in name resolution"
+    )
+    offline = re.search(resolve_failed, out) and "unable to resolve host address" in out
+    fetched = re.search(r"awaiting response\.\.\. \d{3}", out)
+    if "failed: Operation timed out" in out:
+        return False, "prints 'Operation timed out', which real wget never does"
+    if took > FETCH_SLOW_SECONDS:
+        return False, f"took {took:.0f}s to answer"
+    if not (offline or fetched):
+        return False, (out.splitlines() or ["no output"])[-1][:100]
+    return True, f"{'offline' if offline else 'fetched'} in {took:.1f}s"
+
+
+@check(
+    "curl-failure-realistic",
+    2,
+    "A `curl` that fails looks like real curl, and fails fast",
+    ref="row 23",
+)
+def _(p: Probe):
+    out, took = _timed(p, "curl http://example.com/x.sh")
+    if took > FETCH_SLOW_SECONDS:
+        return False, f"took {took:.0f}s to answer"
+    if "curl: (6) Could not resolve host: example.com" in out:
+        return True, f"offline in {took:.1f}s"
+    if "curl: (" in out:
+        return False, out.splitlines()[-1][:100]
+    return bool(out), f"fetched in {took:.1f}s" if out else "no output"
 
 
 # tier 3 ---------------------------------------------------------------------------------

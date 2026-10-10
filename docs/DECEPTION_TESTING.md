@@ -6,16 +6,19 @@ a feeling, and it can be re-run after every change.
 
 ## Results
 
-Both runs used Cowrie 3.1.1 on the same machine, from a separate client, over SSH.
+Both runs used Cowrie 3.1.1 on the same machine, from a separate client, over SSH. Both ran in a
+network namespace with no route out, so the two download checks (tier 2) pass for stock Cowrie here:
+on a real host with the firewall dropping packets, stock Cowrie waits about ten seconds and prints
+wording real wget never uses, as seen on a live deployment. See "Failed downloads" below.
 
 | Attacker class | Stock Cowrie | With the kit |
 |---|---|---|
 | 1. Scanners and bots | 2 / 7 | **7 / 7** |
-| 2. Quick manual look | 6 / 16 | **16 / 16** |
+| 2. Quick manual look | 8 / 18 | **18 / 18** |
 | 3. Skilled operator | 2 / 15 | 7 / 15 |
 | 4. Protocol-aware tooling | 0 / 7 | 0 / 7 |
-| **Overall** | **10 / 45 (22%)** | **30 / 45 (67%)** |
-| Checks that configuration can fix | 10 / 30 | **30 / 30** |
+| **Overall** | **12 / 47 (26%)** | **32 / 47 (68%)** |
+| Checks that configuration can fix | 12 / 32 | **32 / 32** |
 
 Raw results are in `evaluation/results/`; `--compare` regenerates this table.
 
@@ -25,12 +28,27 @@ What the numbers say:
   or `df` finds nothing to separate it from Debian 12.
 - Tier 3 and 4 are mostly out of reach. Those checks look at how Cowrie is built (Twisted's SSH
   stack, Python command re-implementations, a filesystem derived from a container image). Fifteen of
-  the 45 checks are marked "config cannot fix", and the kit fails exactly those and nothing else.
+  the 47 checks are marked "config cannot fix", and the kit fails exactly those and nothing else.
 - Early runs showed two fixable gaps, both now closed: `/proc` listed only two process directories,
   and `free` reported the host's real memory while `/proc/meminfo` claimed 4 GB. The kit now
   generates one `/proc/<pid>` per `ps` row, and sets the persona's memory to the host's.
 - A skilled operator will still identify Cowrie. The kit raises the cost; it does not make the
   honeypot invisible. `cowrie/FINGERPRINTING.md` explains each gap.
+
+## Failed downloads
+
+The first thing many attackers do is `wget` or `curl` a script. With egress blocked the fetch must
+fail the way it would on a real server whose network is down: at once, and in the tools' own words
+(`Resolving example.com (example.com)... failed: Temporary failure in name resolution` for wget,
+`curl: (6) Could not resolve host` for curl). On a live deployment with outbound traffic dropped,
+Docker's built-in resolver still answered, so wget printed `connected.`, hung for ten seconds, then
+ended with `failed: Operation timed out.`, which real wget never prints. That also meant DNS queries
+were leaving the container.
+
+The deny-mode fix is a local resolver stub (`cowrie/tools/sinkdns.py`) that answers every lookup
+with SERVFAIL instantly and forwards nothing. The two checks `wget-failure-realistic` and
+`curl-failure-realistic` accept either a plausible completed fetch or the genuine offline failure,
+and fail on Cowrie's own wording or on any answer slower than 20 seconds.
 
 ## Running it
 

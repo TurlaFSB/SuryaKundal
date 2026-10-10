@@ -1,14 +1,14 @@
 {
-  "label": "with the Surya Kundal kit",
+  "label": "with-kit",
   "summary": {
     "overall": {
-      "passed": 30,
-      "total": 45,
-      "score": 0.667
+      "passed": 32,
+      "total": 47,
+      "score": 0.681
     },
     "fixable": {
-      "passed": 30,
-      "total": 30,
+      "passed": 32,
+      "total": 32,
       "score": 1.0
     },
     "tiers": {
@@ -18,8 +18,8 @@
         "score": 1.0
       },
       "2": {
-        "passed": 16,
-        "total": 16,
+        "passed": 18,
+        "total": 18,
         "score": 1.0
       },
       "3": {
@@ -241,6 +241,24 @@
       "detail": "root:x:0:0:root:/root:/bin/bash",
       "limit": false,
       "ref": "row 5"
+    },
+    {
+      "id": "wget-failure-realistic",
+      "tier": 2,
+      "title": "A `wget` that fails looks like real wget, and fails fast",
+      "status": "pass",
+      "detail": "offline in 0.1s",
+      "limit": false,
+      "ref": "row 23"
+    },
+    {
+      "id": "curl-failure-realistic",
+      "tier": 2,
+      "title": "A `curl` that fails looks like real curl, and fails fast",
+      "status": "pass",
+      "detail": "offline in 0.1s",
+      "limit": false,
+      "ref": "row 23"
     },
     {
       "id": "free-matches-meminfo",

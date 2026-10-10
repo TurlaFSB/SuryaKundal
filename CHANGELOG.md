@@ -13,14 +13,22 @@ All notable changes to this project are recorded here. The format follows
   host, your LAN and the cloud metadata address are unreachable, and replies to attackers' inbound
   connections still pass. `verify` proves it from inside the container; `install` re-applies it at boot.
   Tested on a real kernel firewall with packets crossing network namespaces, and checked with ShellCheck.
+- Deny mode closes DNS too. Docker's built-in resolver forwards a container's lookups to the internet
+  without touching the container's packets, so a firewall alone let names resolve. The honeypot now
+  uses its own resolver file and a local stub (`cowrie/tools/sinkdns.py`) that answers every lookup
+  with an instant SERVFAIL, so a blocked `wget` or `curl` fails the way a real offline server does
+  (previously: `connected.`, a ten-second hang, then wording real wget never prints). `captures` mode
+  allows DNS only to two named resolvers. Selected with `EGRESS_MODE` in `.env`.
+- Two harness checks, `wget-failure-realistic` and `curl-failure-realistic`, keep that behavior from
+  regressing. The committed results are re-measured: stock Cowrie 12 of 47, with the kit 32 of 47.
 - Release pipeline (`release.yml`): a version tag builds both images, publishes them to GHCR, signs each by digest with Sigstore (keyless) and attaches a CycloneDX bill of materials to the GitHub release. CI also scans the full git history for secrets with Gitleaks.
 - Operations: `surya-kundal backup` (online, verified, private, optional gzip and rotation),
   `restore` (refuses to overwrite, keeps what it replaced, rejects damaged or newer-schema files),
   and `prune --older-than DAYS` (reports first, deletes only with `--yes`, recomputes campaigns).
   A password-protected Prometheus `/metrics` endpoint. See `docs/OPERATIONS.md`.
-- Deception test harness (`evaluation/deception_check.py`, `docs/DECEPTION_TESTING.md`): 45 probes
-  grouped by attacker class, JSON output, before/after comparison. Stock Cowrie 3.1.1 passes 10 of
-  45; with the kit, 30 of 45 (every check configuration can fix).
+- Deception test harness (`evaluation/deception_check.py`, `docs/DECEPTION_TESTING.md`): 47 probes
+  grouped by attacker class, JSON output, before/after comparison. Stock Cowrie 3.1.1 passes 12 of
+  47; with the kit, 32 of 47 (every check configuration can fix).
 - The kit sets the persona's memory to the host's real `MemTotal` at deploy time (scaling the related
   `/proc/meminfo` fields), so `free` and `/proc/meminfo` agree on any VM. `--memtotal-kb` overrides it.
 - The kit builds a `/proc/<pid>` directory (`cmdline`, `comm`, `status`, `stat`) for every process

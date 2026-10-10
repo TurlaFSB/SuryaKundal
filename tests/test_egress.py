@@ -47,6 +47,14 @@ def forward_chain(rules: list[str]) -> list[str]:
     return [ln for ln in rules if ln.startswith(f"iptables -A {FWD} ")]
 
 
+def test_default_resolvers_match_the_captures_resolver_file():
+    """The firewall allows exactly the resolvers the honeypot is configured to ask."""
+    conf = (ROOT / "cowrie" / "resolv.captures.conf").read_text()
+    configured = set(re.findall(r"^nameserver (\S+)$", conf, re.MULTILINE))
+    default = re.search(r'DNS_ALLOW="\$\{SURYA_EGRESS_DNS:-([^}]+)\}"', SCRIPT.read_text())
+    assert default and set(default.group(1).split(",")) == configured
+
+
 def test_script_is_valid_bash_and_executable():
     assert subprocess.run(["bash", "-n", str(SCRIPT)]).returncode == 0
     assert os.access(SCRIPT, os.X_OK)
@@ -100,14 +108,17 @@ def test_captures_refuses_reserved_ranges_before_allowing_anything():
     assert "--dport 25" not in text and "--dports 22" not in text
 
 
-def test_captures_allows_only_web_and_dns_with_a_rate_and_connection_cap():
+def test_captures_allows_only_web_and_the_two_named_resolvers():
     chain = forward_chain(v4_rules("captures"))
     returns = [ln for ln in chain if ln.endswith("-j RETURN")]
-    assert len(returns) == 3  # replies, web, DNS
+    assert len(returns) == 6  # replies, web, and UDP + TCP DNS for each of two resolvers
     web = next(ln for ln in returns if "--dports 80,443" in ln)
     assert "-p tcp" in web and "--ctstate NEW" in web and "--limit 30/minute" in web
-    dns = next(ln for ln in returns if "--dport 53" in ln)
-    assert "-p udp" in dns and "--limit" in dns
+    dns = [ln for ln in returns if "--dport 53" in ln]
+    assert len(dns) == 4 and all("--limit" in ln and " -d " in ln for ln in dns)
+    assert {re.search(r"-d (\S+)", ln).group(1) for ln in dns} == {"1.1.1.1", "9.9.9.9"}
+    # No rule allows DNS to an arbitrary address.
+    assert not any("--dport 53" in ln and " -d " not in ln for ln in chain)
     cap = next(ln for ln in chain if "connlimit" in ln)
     assert "--connlimit-above 20" in cap and cap.endswith("-j SURYA-HONEY-DROP")
     assert chain.index(cap) < chain.index(web)  # the cap is checked before the allow
@@ -197,6 +208,16 @@ def test_boot_unit_runs_after_docker_and_removes_the_rules_on_stop():
 def test_compose_puts_only_the_honeypot_on_its_own_bridge():
     compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
     assert compose["services"]["cowrie"]["networks"] == ["honeynet"]
+    cowrie = compose["services"]["cowrie"]
+    # The honeypot's resolver is chosen by EGRESS_MODE and Docker's own resolver is not used.
+    resolv = next(
+        v for v in cowrie["volumes"] if isinstance(v, dict) and v["target"] == "/etc/resolv.conf"
+    )
+    assert resolv["source"] == "./cowrie/resolv.${EGRESS_MODE:-deny}.conf"
+    assert resolv["read_only"] is True and resolv["bind"]["create_host_path"] is False
+    assert cowrie["sysctls"] == {"net.ipv4.ip_unprivileged_port_start": "53"}
+    for mode in ("deny", "captures"):
+        assert (ROOT / "cowrie" / f"resolv.{mode}.conf").is_file()
     assert "networks" not in compose["services"]["pipeline"]
     assert "networks" not in compose["services"]["dashboard"]
     bridge = compose["networks"]["honeynet"]["driver_opts"]["com.docker.network.bridge.name"]

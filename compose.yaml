@@ -74,6 +74,9 @@ services:
     # Its own bridge with a fixed name, so the host firewall (cowrie/egress.sh) can limit what
     # the honeypot may open towards the internet, the host and your LAN. See docs/EGRESS.md.
     networks: [honeynet]
+    sysctls:
+      # Lets the unprivileged honeypot user run its local resolver stub on port 53 (deny mode).
+      net.ipv4.ip_unprivileged_port_start: "53"
     ports:
       # Loopback by default so a test run never exposes the honeypot by accident.
       - "${COWRIE_BIND:-127.0.0.1}:2222:2222"
@@ -83,6 +86,16 @@ services:
       # Nested over the state volume: the JSON log lives in its own volume so the pipeline
       # can mount it read-only.
       - cowrie_log:/cowrie/var/log/cowrie
+      # What the honeypot can resolve. deny (default): a local stub that always fails, so no
+      # DNS query leaves. captures: two named public resolvers (set EGRESS_MODE=captures in .env
+      # and run `cowrie/egress.sh apply captures`). Docker's built-in resolver is not used,
+      # because it forwards queries to the internet on the container's behalf.
+      - type: bind
+        source: ./cowrie/resolv.${EGRESS_MODE:-deny}.conf
+        target: /etc/resolv.conf
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "python", "/opt/kit/healthcheck.py"]
       interval: 30s

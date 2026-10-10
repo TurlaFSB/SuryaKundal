@@ -19,4 +19,17 @@ case "${COWRIE_POLICY:-collect}" in
 esac
 
 /opt/kit/deploy.sh --cowrie-home /cowrie --policy "${COWRIE_POLICY:-collect}"
+
+# Deny mode (compose.yaml mounts cowrie/resolv.deny.conf): the container's resolver is
+# 127.0.0.1, so answer lookups there with an instant SERVFAIL. Nothing is forwarded. Without
+# this, Cowrie's DNS library would wait about a minute for a resolver that is not there.
+if grep -qx 'nameserver 127.0.0.1' /etc/resolv.conf 2>/dev/null; then
+    python /opt/kit/tools/sinkdns.py &
+    sink=$!
+    sleep 0.5
+    if ! kill -0 "$sink" 2>/dev/null; then
+        echo "entrypoint: WARNING the local resolver stub did not start (compose.yaml sets" \
+             "net.ipv4.ip_unprivileged_port_start=53 for it); downloads will hang before failing" >&2
+    fi
+fi
 exec cowrie start

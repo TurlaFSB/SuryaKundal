@@ -1,15 +1,15 @@
 {
-  "label": "stock Cowrie 3.1.1",
+  "label": "stock-cowrie-3.1.1",
   "summary": {
     "overall": {
-      "passed": 10,
-      "total": 45,
-      "score": 0.222
+      "passed": 12,
+      "total": 47,
+      "score": 0.255
     },
     "fixable": {
-      "passed": 10,
-      "total": 30,
-      "score": 0.333
+      "passed": 12,
+      "total": 32,
+      "score": 0.375
     },
     "tiers": {
       "1": {
@@ -18,9 +18,9 @@
         "score": 0.286
       },
       "2": {
-        "passed": 6,
-        "total": 16,
-        "score": 0.375
+        "passed": 8,
+        "total": 18,
+        "score": 0.444
       },
       "3": {
         "passed": 2,
@@ -76,7 +76,7 @@
       "tier": 1,
       "title": "Stock Cowrie accounts and wildcard passwords are refused",
       "status": "fail",
-      "detail": "accepted: phil, 24df52a0",
+      "detail": "accepted: phil, d6ce2626",
       "limit": false,
       "ref": "row 4"
     },
@@ -243,6 +243,24 @@
       "ref": "row 5"
     },
     {
+      "id": "wget-failure-realistic",
+      "tier": 2,
+      "title": "A `wget` that fails looks like real wget, and fails fast",
+      "status": "pass",
+      "detail": "offline in 0.1s",
+      "limit": false,
+      "ref": "row 23"
+    },
+    {
+      "id": "curl-failure-realistic",
+      "tier": 2,
+      "title": "A `curl` that fails looks like real curl, and fails fast",
+      "status": "pass",
+      "detail": "offline in 0.1s",
+      "limit": false,
+      "ref": "row 23"
+    },
+    {
       "id": "free-matches-meminfo",
       "tier": 3,
       "title": "`free` and /proc/meminfo report the same memory",
@@ -283,7 +301,7 @@
       "tier": 3,
       "title": "`uptime` agrees with /proc/uptime",
       "status": "pass",
-      "detail": "/proc/uptime 76.4 d, uptime 76 d",
+      "detail": "/proc/uptime 26.5 d, uptime 26 d",
       "limit": false,
       "ref": "row 13"
     },

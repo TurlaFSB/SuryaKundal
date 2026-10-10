@@ -148,7 +148,7 @@ Before exposing the honeypot, lock down what it can reach: [`docs/EGRESS.md`](do
 Two harnesses in [`evaluation/`](evaluation/) give numbers instead of claims:
 
 - **ATT&CK mapper**: 103 hand-labelled commands; first run precision 0.90, recall 0.93, then fixed. See [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md).
-- **Honeypot deception**: 45 probes grouped by attacker class. Stock Cowrie passes 10, with the kit 30, which is every check configuration can fix. See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
+- **Honeypot deception**: 47 probes grouped by attacker class. Stock Cowrie passes 12, with the kit 32, which is every check configuration can fix. See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
 
 ```bash
 surya-kundal export --format stix --output iocs.json          # STIX 2.1 for MISP, OpenCTI and others

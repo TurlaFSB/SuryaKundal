@@ -16,9 +16,11 @@
 # Modes:
 #   deny      nothing the honeypot starts itself may leave (the default). Cowrie still logs the
 #             URL an attacker tried to fetch, which is the indicator; it just cannot save the file.
-#   captures  web only: TCP 80/443 and DNS to public addresses, rate-limited and capped. Real
-#             malware samples are collected, but this machine makes real connections for attackers.
-#             Private, link-local, multicast and other reserved ranges are always refused.
+#   captures  web only: TCP 80/443 to public addresses, plus DNS to two named resolvers,
+#             rate-limited and capped. Real malware samples are collected, but this machine makes
+#             real connections for attackers. Private, link-local, multicast and other reserved
+#             ranges are always refused. Set EGRESS_MODE=captures in .env so the honeypot's
+#             resolver (cowrie/resolv.captures.conf) matches.
 #
 # In both modes, replies on connections an attacker opened INTO the honeypot are always allowed
 # (that is how SSH works), and anything the honeypot tries to open towards the host itself is
@@ -30,9 +32,8 @@
 #   SURYA_EGRESS_RATE      captures: new connections allowed, e.g. 30/minute (30/minute)
 #   SURYA_EGRESS_BURST     captures: burst above that rate                 (15)
 #   SURYA_EGRESS_MAX_CONNS captures: concurrent connections cap            (20)
-#   SURYA_EGRESS_DNS       captures: extra resolver addresses to allow, comma separated. Cloud
-#                          images often use a private or link-local resolver (for example
-#                          169.254.169.254); name it here, otherwise it is refused.
+#   SURYA_EGRESS_DNS       captures: the only resolvers the honeypot may ask, comma separated
+#                          (1.1.1.1,9.9.9.9). Must match cowrie/resolv.captures.conf.
 set -euo pipefail
 
 BRIDGE="${SURYA_HONEY_BRIDGE:-br-suryahoney}"
@@ -40,7 +41,7 @@ CONTAINER="${SURYA_HONEY_CONTAINER:-surya-cowrie}"
 RATE="${SURYA_EGRESS_RATE:-30/minute}"
 BURST="${SURYA_EGRESS_BURST:-15}"
 MAX_CONNS="${SURYA_EGRESS_MAX_CONNS:-20}"
-DNS_ALLOW="${SURYA_EGRESS_DNS:-}"
+DNS_ALLOW="${SURYA_EGRESS_DNS:-1.1.1.1,9.9.9.9}"
 
 FWD_CHAIN="SURYA-HONEY-FWD"   # traffic the honeypot sends through the host
 IN_CHAIN="SURYA-HONEY-IN"     # traffic the honeypot sends to the host itself
@@ -74,9 +75,8 @@ validate_settings() {
     || die "SURYA_EGRESS_RATE '$RATE' must look like 30/minute (units: second, minute, hour, day)"
   [[ "$BURST" =~ ^[0-9]+$ && "$MAX_CONNS" =~ ^[0-9]+$ ]] \
     || die "SURYA_EGRESS_BURST and SURYA_EGRESS_MAX_CONNS must be whole numbers"
-  if [[ -n "$DNS_ALLOW" && ! "$DNS_ALLOW" =~ ^[0-9./]+(,[0-9./]+)*$ ]]; then
-    die "SURYA_EGRESS_DNS must be comma-separated IPv4 addresses or networks"
-  fi
+  [[ "$DNS_ALLOW" =~ ^[0-9./]+(,[0-9./]+)*$ ]] \
+    || die "SURYA_EGRESS_DNS must be comma-separated IPv4 addresses or networks"
 }
 
 valid_mode() { [[ "$1" == "deny" || "$1" == "captures" ]]; }
@@ -122,26 +122,25 @@ drop_chain_rules() {
 }
 
 forward_rules() {
-  local mode="$1" range resolver
+  local mode="$1" range resolver proto
   fresh_chain "$FWD_CHAIN"
   # Replies to connections an attacker opened into the honeypot.
   fw -A "$FWD_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
   fw -A "$FWD_CHAIN" -m conntrack --ctstate INVALID -j "$DROP_CHAIN"
   if [[ "$mode" == "captures" && "$FW" == "iptables" ]]; then
-    if [[ -n "$DNS_ALLOW" ]]; then
-      for resolver in ${DNS_ALLOW//,/ }; do
-        fw -A "$FWD_CHAIN" -d "$resolver" -p udp --dport 53 -m conntrack --ctstate NEW \
+    # The only names the honeypot may resolve go to these resolvers (cowrie/resolv.captures.conf).
+    for resolver in ${DNS_ALLOW//,/ }; do
+      for proto in udp tcp; do
+        fw -A "$FWD_CHAIN" -d "$resolver" -p "$proto" --dport 53 -m conntrack --ctstate NEW \
           -m limit --limit "$RATE" --limit-burst "$BURST" -j RETURN
       done
-    fi
+    done
     for range in "${RESERVED_V4[@]}"; do
       fw -A "$FWD_CHAIN" -d "$range" -j "$DROP_CHAIN"
     done
     fw -A "$FWD_CHAIN" -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW \
       -m connlimit --connlimit-above "$MAX_CONNS" --connlimit-mask 32 -j "$DROP_CHAIN"
     fw -A "$FWD_CHAIN" -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW \
-      -m limit --limit "$RATE" --limit-burst "$BURST" -j RETURN
-    fw -A "$FWD_CHAIN" -p udp --dport 53 -m conntrack --ctstate NEW \
       -m limit --limit "$RATE" --limit-burst "$BURST" -j RETURN
   fi
   fw -A "$FWD_CHAIN" -j "$DROP_CHAIN"
@@ -195,6 +194,11 @@ cmd_apply() {
   FW=iptables apply_family "$mode"
   FW=ip6tables apply_family "$mode"
   say "applied mode=${mode} to bridge ${BRIDGE}"
+  if [[ "$mode" == "captures" ]]; then
+    say "set EGRESS_MODE=captures in .env and run: docker compose --profile honeypot up -d"
+  else
+    say "keep EGRESS_MODE unset (or deny) in .env so the honeypot's resolver matches"
+  fi
   ((DRY_RUN)) || say "check it from inside the container with: $0 verify"
 }
 
@@ -276,6 +280,29 @@ expect_passed() { # label kind host port
   else printf '  FAIL  blocked but should be allowed  %s\n' "$1"; FAILED=1; fi
 }
 
+# Can the honeypot resolve a name through its own system resolver (what wget and curl use)?
+lookup_works() {
+  docker exec "$CONTAINER" python -c '
+import socket, sys
+try:
+    socket.getaddrinfo("example.com", 80)
+except OSError:
+    sys.exit(1)
+' >/dev/null 2>&1
+}
+
+expect_lookup() { # label want(yes|no)
+  local worked=no
+  lookup_works && worked=yes
+  if [[ "$worked" == "$2" ]]; then
+    printf '  PASS  %-9s %s\n' "$([[ $2 == yes ]] && echo works || echo blocked)" "$1"
+  elif [[ "$2" == "no" ]]; then
+    printf '  FAIL  NOT BLOCKED  %s (name lookups leave through the resolver)\n' "$1"; FAILED=1
+  else
+    printf '  FAIL  lookups fail but captures needs them  %s (set EGRESS_MODE=captures in .env, then: docker compose --profile honeypot up -d)\n' "$1"; FAILED=1
+  fi
+}
+
 cmd_verify() {
   validate_settings
   need_root_and_tools
@@ -291,7 +318,9 @@ cmd_verify() {
     expect_dropped "public web (1.1.1.1:443)" tcp 1.1.1.1 443
     expect_dropped "public web (1.1.1.1:80)" tcp 1.1.1.1 80
     expect_dropped "public DNS (1.1.1.1:53/udp)" udp 1.1.1.1 53
+    expect_lookup "name lookups through the system resolver" no
   else
+    expect_lookup "name lookups through the system resolver" yes
     expect_passed "public web (1.1.1.1:443)" tcp 1.1.1.1 443
     expect_dropped "mail port (1.1.1.1:25)" tcp 1.1.1.1 25
     expect_dropped "remote shell port (1.1.1.1:22)" tcp 1.1.1.1 22

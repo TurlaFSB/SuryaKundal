@@ -21,30 +21,40 @@ sudo ./cowrie/egress.sh install deny        # re-apply after every reboot (syste
 |---|---|
 | `apply [deny\|captures]` | Installs the rules. Safe to repeat; switching modes replaces the old rules. |
 | `status` | Shows the active mode and packet counters. Exits 3 if nothing is applied. |
-| `verify` | Tries real connections from inside the running container and checks that the drop counters moved. Exits 1 on any failure. |
+| `verify` | Tries real connections and a real name lookup from inside the running container, and checks the drop counters moved. Exits 1 on any failure. |
 | `remove` | Takes the rules out and restores the firewall to how it was. |
 | `install` / `uninstall` | Adds or removes a systemd unit that re-applies the rules at boot. |
 | `--dry-run` (before the command) | Prints what would run, changes nothing, needs no root. |
 
 ## Two modes
 
-**`deny` (the default).** Nothing the honeypot starts can leave. Cowrie still records the URL an
-attacker tried to fetch, which is the indicator you want, but it cannot save the file itself. A failed
-fetch looks like a server with no internet access, which is common behind a firewall.
+**`deny` (the default).** Nothing the honeypot starts can leave, including DNS. Cowrie still records
+the URL an attacker tried to fetch, which is the indicator you want, but it cannot save the file itself.
+A failed fetch looks like a server whose network is down: `wget` prints `Resolving ... failed: Temporary
+failure in name resolution` and `curl` prints `(6) Could not resolve host`, both at once.
 
-**`captures`.** Only web traffic leaves: TCP 80 and 443 and DNS to public addresses, at a limited rate
+Name lookups need their own treatment. Docker's built-in resolver answers on a container's behalf, so a
+firewall on the container's packets never sees the query, and an attacker could resolve names (a
+covert channel) and learn that the machine has internet. In `deny` mode the honeypot therefore uses
+its own resolver file (`cowrie/resolv.deny.conf`, pointing at `127.0.0.1`), and a tiny stub in the
+container (`cowrie/tools/sinkdns.py`) answers every lookup with an immediate failure. It forwards
+nothing and logs nothing. Without the stub, Cowrie's DNS library would wait about a minute.
+
+**`captures`.** Only web traffic leaves: TCP 80 and 443 to public addresses, plus DNS to exactly two
+resolvers (1.1.1.1 and 9.9.9.9, set in `cowrie/resolv.captures.conf`), at a limited rate
 (`SURYA_EGRESS_RATE`, default 30/minute, burst 15) with a cap on concurrent connections
 (`SURYA_EGRESS_MAX_CONNS`, default 20). Real malware samples come in, and file hashes feed campaign
 clustering. The cost is that this machine makes real HTTP requests on an attacker's behalf. Use it only
 on a disposable VM with its own address that you are prepared to see on blocklists.
 
+To switch, set `EGRESS_MODE=captures` in `.env`, run `sudo ./cowrie/egress.sh apply captures`, then
+`docker compose --profile honeypot up -d` so the honeypot picks up the matching resolver file. Switch
+back by unsetting `EGRESS_MODE` and applying `deny`. `verify` fails if the two do not agree.
+
 Both modes also refuse, always: private, link-local, carrier-grade NAT, multicast and other reserved
 ranges (so the LAN and the metadata service are unreachable), and every connection the honeypot tries
 to open to the host itself. Replies on connections an attacker opened into the honeypot always pass;
 that is how SSH works.
-
-Cloud images often use a private or link-local DNS resolver. In `captures` mode, name it so lookups
-keep working: `SURYA_EGRESS_DNS=169.254.169.254 sudo -E ./cowrie/egress.sh apply captures`.
 
 ## What was verified
 
@@ -59,6 +69,9 @@ private address, and on the host itself.
 | a private network address | reaches | blocked | blocked |
 | the host (bridge gateway) | reaches | blocked | blocked |
 | attacker connecting **in**, replies out | works | works | works |
+
+Name lookups are checked separately by `verify` (inside the real container): they fail in `deny` and
+work in `captures`.
 
 After `remove`, every row returns to "reaches": the rules leave nothing behind.
 
@@ -89,7 +102,7 @@ All optional, set as environment variables when you run the script.
 | `SURYA_EGRESS_RATE` | `30/minute` | `captures`: new connections allowed. |
 | `SURYA_EGRESS_BURST` | `15` | `captures`: burst above that rate. |
 | `SURYA_EGRESS_MAX_CONNS` | `20` | `captures`: concurrent connections. |
-| `SURYA_EGRESS_DNS` | empty | `captures`: extra resolver addresses to allow. |
+| `SURYA_EGRESS_DNS` | `1.1.1.1,9.9.9.9` | `captures`: the only resolvers allowed; must match `cowrie/resolv.captures.conf`. |
 
 The bridge subnet defaults to `172.29.77.0/24`; if that clashes with a network you already use, set
 `HONEY_SUBNET` in `.env`.

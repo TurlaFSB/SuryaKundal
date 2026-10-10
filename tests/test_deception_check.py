@@ -60,6 +60,12 @@ GOOD = {
     "echo hello | grep -c hello": "1",
     "wc -c /etc/hostname /etc/hosts": "11 /etc/hostname\n200 /etc/hosts\n211 total",
     "echo $0": "bash",
+    "wget http://example.com/x.sh": (
+        "--2026-10-10 12:54:50--  http://example.com/x.sh\n"
+        "Resolving example.com (example.com)... failed: Temporary failure in name resolution.\n"
+        "wget: unable to resolve host address \u2018example.com\u2019"
+    ),
+    "curl http://example.com/x.sh": "curl: (6) Could not resolve host: example.com",
 }
 
 
@@ -263,3 +269,48 @@ def test_cli_compare_prints_a_table(tmp_path, capsys):
         )
     assert dc.main(["--compare", str(tmp_path / "a.json"), str(tmp_path / "b.json")]) == 0
     assert "a -> b" in capsys.readouterr().out
+
+
+def _fetch(results, check_id):
+    return _by_id(results)[check_id]
+
+
+def test_offline_fetch_failures_pass():
+    results = dc.run_checks(FakeProbe(GOOD))
+    assert _fetch(results, "wget-failure-realistic").status == "pass"
+    assert _fetch(results, "curl-failure-realistic").status == "pass"
+
+
+def test_a_completed_fetch_passes_too():
+    outputs = dict(GOOD)
+    outputs["wget http://example.com/x.sh"] = (
+        "Connecting to example.com (example.com)|93.184.216.34|:80... connected.\n"
+        "HTTP request sent, awaiting response... 200 OK"
+    )
+    outputs["curl http://example.com/x.sh"] = "#!/bin/sh\necho hi"
+    results = dc.run_checks(FakeProbe(outputs))
+    assert _fetch(results, "wget-failure-realistic").status == "pass"
+    assert _fetch(results, "curl-failure-realistic").status == "pass"
+
+
+def test_cowrie_style_fetch_failures_are_caught():
+    outputs = dict(GOOD)
+    outputs["wget http://example.com/x.sh"] = (
+        "Connecting to example.com:80... connected.\n"
+        "HTTP request sent, awaiting response... failed: Operation timed out."
+    )
+    outputs["curl http://example.com/x.sh"] = (
+        "curl: (7) Failed to connect to example.com port 80: Operation timed out"
+    )
+    results = dc.run_checks(FakeProbe(outputs))
+    wget = _fetch(results, "wget-failure-realistic")
+    assert wget.status == "fail" and "Operation timed out" in wget.detail
+    assert _fetch(results, "curl-failure-realistic").status == "fail"
+
+
+def test_a_slow_failure_is_caught(monkeypatch):
+    clock = iter(range(0, 1000, 60))  # every reading is a minute after the last
+    monkeypatch.setattr(dc.time, "monotonic", lambda: next(clock))
+    results = dc.run_checks(FakeProbe(GOOD))
+    slow = _fetch(results, "wget-failure-realistic")
+    assert slow.status == "fail" and "took" in slow.detail

@@ -122,3 +122,21 @@ jobs:
           docker exec cw python /opt/kit/healthcheck.py
           test "$(docker exec cw id -u)" = "10002"
           docker logs cw 2>&1 | tail -15
+      - name: Deny mode - no name resolves, and the lookup fails at once
+        run: |
+          docker run -d --name cwdeny --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --sysctl net.ipv4.ip_unprivileged_port_start=53 --tmpfs /tmp \
+            --mount type=volume,target=/cowrie \
+            --mount type=bind,source="$PWD/cowrie/resolv.deny.conf",target=/etc/resolv.conf,readonly \
+            surya-kundal-cowrie:ci
+          for i in $(seq 1 30); do
+            docker exec cwdeny python /opt/kit/healthcheck.py && break
+            sleep 2
+          done
+          docker exec cwdeny python /opt/kit/healthcheck.py
+          start=$(date +%s)
+          if docker exec cwdeny python -c 'import socket; socket.getaddrinfo("example.com", 80)'; then
+            echo "a name resolved in deny mode" >&2; exit 1
+          fi
+          test $(( $(date +%s) - start )) -lt 5   # a down resolver fails in a second, not a minute
+          docker logs cwdeny 2>&1 | grep -i "resolver stub did not start" && exit 1 || true
