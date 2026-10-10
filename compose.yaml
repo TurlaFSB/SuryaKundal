@@ -12,7 +12,8 @@
 #   ssh -p 2222 root@127.0.0.1                 # COWRIE_BIND defaults to loopback
 #
 # COWRIE_BIND=0.0.0.0 exposes the honeypot to the network: do that only on a host you
-# have prepared for it (see docs/THREAT_MODEL.md). Wazuh runs separately (see wazuh/).
+# have prepared for it (see docs/THREAT_MODEL.md) and run cowrie/egress.sh first (docs/EGRESS.md).
+# Wazuh runs separately (see wazuh/).
 # Every container is unprivileged, has a read-only root filesystem, no Linux capabilities,
 # and limits on memory and processes.
 
@@ -70,6 +71,9 @@ services:
       # collect: accepts a few dozen weak root passwords so scanners get in (more data).
       # stealth: three exact pairs only (hardest to spot, very little data).
       COWRIE_POLICY: ${COWRIE_POLICY:-collect}
+    # Its own bridge with a fixed name, so the host firewall (cowrie/egress.sh) can limit what
+    # the honeypot may open towards the internet, the host and your LAN. See docs/EGRESS.md.
+    networks: [honeynet]
     ports:
       # Loopback by default so a test run never exposes the honeypot by accident.
       - "${COWRIE_BIND:-127.0.0.1}:2222:2222"
@@ -114,6 +118,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+networks:
+  honeynet:
+    name: surya-honeynet
+    driver: bridge
+    driver_opts:
+      # Must match SURYA_HONEY_BRIDGE in cowrie/egress.sh (an interface name is 15 characters at most).
+      com.docker.network.bridge.name: br-suryahoney
+    ipam:
+      config:
+        - subnet: ${HONEY_SUBNET:-172.29.77.0/24}
 
 volumes:
   surya_data:

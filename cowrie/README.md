@@ -110,8 +110,10 @@ earlier `cowrie.cfg`, just delete `etc/cowrie.cfg` to go back to defaults.)
 
 ## Don't forget (not handled by this kit)
 
-- Firewall egress from the VM. Cowrie can't hurt anything, but your box can
-  still be abused if something goes wrong.
+- Firewall egress from the VM. Cowrie's `wget` and `curl` make real connections, and from
+  inside a container the honeypot can reach your host and LAN. For the Docker deployment,
+  `egress.sh` does this and proves it works: see [../docs/EGRESS.md](../docs/EGRESS.md). For a
+  Cowrie you run outside Docker, apply an equivalent deny-by-default rule yourself.
 - Keep your real admin SSH off port 22 and off the honeypot's address.
 - Cowrie listens on 2222; redirect 22 to it with iptables/nftables if you
   want it on 22. Cowrie refuses to run as root.

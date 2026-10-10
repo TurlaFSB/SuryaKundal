@@ -96,7 +96,7 @@ docker compose ps                          # all three services should become "h
 ssh -p 2222 root@127.0.0.1                 # try the honeypot (weak passwords are accepted on purpose)
 ```
 
-- **Honeypot (`cowrie`)** is Cowrie 3.1.1, pinned to an exact commit, with the deception kit applied at every start. The persona, host keys and boot time live in the `cowrie_state` volume, so a restart does not change what a scanner sees. It listens on `127.0.0.1:2222` unless you set `COWRIE_BIND`; read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) before exposing it. `COWRIE_POLICY=stealth` accepts three exact logins instead of a few dozen weak ones.
+- **Honeypot (`cowrie`)** is Cowrie 3.1.1, pinned to an exact commit, with the deception kit applied at every start. The persona, host keys and boot time live in the `cowrie_state` volume, so a restart does not change what a scanner sees. It listens on `127.0.0.1:2222` unless you set `COWRIE_BIND`; read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) and apply [`docs/EGRESS.md`](docs/EGRESS.md) before exposing it. `COWRIE_POLICY=stealth` accepts three exact logins instead of a few dozen weak ones.
 - **Pipeline and dashboard** read the honeypot's log through a shared read-only volume. To analyse a Cowrie that runs elsewhere, set `COWRIE_LOG_DIR` and omit the profile: `docker compose up -d --build`.
 - Only the pipeline receives `.env` (API keys for enrichment). The honeypot and dashboard get no other secrets.
 - The dashboard is published on `http://127.0.0.1:8080` only; the password is `DASHBOARD_TOKEN`. `docker compose logs -f cowrie` follows the honeypot.
@@ -139,7 +139,7 @@ Session 051b29d11c6c from 203.0.113.7 at 2026-10-05 07:11:23 UTC
 
 `surya-kundal export` turns the database into indicators other tools can use: attacker addresses, file hashes and download URLs, each with first and last sighting, a confidence score, geography and the ATT&CK techniques seen. See [`docs/IOC_EXPORT.md`](docs/IOC_EXPORT.md) for the formats, the confidence rules and the safety rules.
 
-Running it unattended: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) covers backup and restore, retention (`surya-kundal prune`) and Prometheus metrics.
+Before exposing the honeypot, lock down what it can reach: [`docs/EGRESS.md`](docs/EGRESS.md) (`cowrie/egress.sh`). Running it unattended: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) covers backup and restore, retention (`surya-kundal prune`) and Prometheus metrics.
 
 `surya-kundal campaigns` groups sessions that share a payload, script or tooling fingerprint, with the evidence for each group; see [`docs/CAMPAIGNS.md`](docs/CAMPAIGNS.md).
 

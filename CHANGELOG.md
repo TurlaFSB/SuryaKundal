@@ -7,6 +7,12 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Egress control for the honeypot (`cowrie/egress.sh`, `docs/EGRESS.md`): the honeypot container gets
+  its own Docker bridge, and a host firewall stops it opening connections to the internet (`deny`, the
+  default) or limits it to rate-limited web traffic to public addresses (`captures`). In both modes the
+  host, your LAN and the cloud metadata address are unreachable, and replies to attackers' inbound
+  connections still pass. `verify` proves it from inside the container; `install` re-applies it at boot.
+  Tested on a real kernel firewall with packets crossing network namespaces, and checked with ShellCheck.
 - Release pipeline (`release.yml`): a version tag builds both images, publishes them to GHCR, signs each by digest with Sigstore (keyless) and attaches a CycloneDX bill of materials to the GitHub release. CI also scans the full git history for secrets with Gitleaks.
 - Operations: `surya-kundal backup` (online, verified, private, optional gzip and rotation),
   `restore` (refuses to overwrite, keeps what it replaced, rejects damaged or newer-schema files),

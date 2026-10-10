@@ -122,7 +122,8 @@ that is not "any password"; removal of Docker/VirtualBox/phil artifacts; a
    credentials or keys that work anywhere else, no route to your LAN or
    management network. Cowrie's `wget`, `curl`, `nc`, `ftpget` and `tftp`
    make **real outbound connections** to attacker-chosen hosts (verified
-   in the dist rate-limit and `out_addr` text), so apply an egress firewall:
+   in the dist rate-limit and `out_addr` text), so apply an egress firewall
+   (the Docker deployment has one, `cowrie/egress.sh`: see [docs/EGRESS.md](../docs/EGRESS.md)):
    deny RFC1918 and your management ranges, rate-limit, log. Decide
    consciously whether to allow any outbound at all (denied fetches are
    themselves a tell, allowed ones are risky).
