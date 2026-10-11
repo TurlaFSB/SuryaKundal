@@ -264,6 +264,7 @@ fi
     --cmdoutput-src "$KIT_DIR/etc/cmdoutput.example.json" \
     --cmdoutput-out "$BUILD/cmdoutput.json" \
     --hostkey-dir "$KEY_DIR" \
+    --persona-out "$BUILD/persona.env" \
     --seed "$SEED" \
     --boot-offset "$BOOT_OFFSET" \
     --now "$DEPLOY_EPOCH" | sed 's/^/  /'
@@ -273,6 +274,9 @@ RENDERED_CFG="$BUILD/cowrie.cfg"
 cfg_text="$(<"$KIT_DIR/etc/cowrie.cfg.example")"
 cfg_text="${cfg_text//@COWRIE_HOME@/$COWRIE_HOME}"
 cfg_text="${cfg_text//@BOOT_OFFSET@/$BOOT_OFFSET}"
+HOST_IP="$(sed -n 's/^HOST_IP=//p' "$BUILD/persona.env" | head -n 1)"
+[[ "$HOST_IP" =~ ^10\.20\.0\.[0-9]{1,3}$ ]] || die "build_fs.py gave no usable HOST_IP ($HOST_IP)"
+cfg_text="${cfg_text//@HOST_IP@/$HOST_IP}"
 printf '%s\n' "$cfg_text" >"$RENDERED_CFG"
 if grep -q '@[A-Z_]*@' "$RENDERED_CFG"; then
     # the comment block mentions the tokens by name; only fail on assignments

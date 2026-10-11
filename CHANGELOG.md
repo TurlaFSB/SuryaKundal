@@ -22,6 +22,12 @@ All notable changes to this project are recorded here. The format follows
   same hosts, and the campaign rebuild uses less memory.
 
 ### Added
+- Deception kit: a per-deployment network identity (address, MAC, link-local address on the resolver's
+  10.20.0.0/24) used by `ifconfig` through Cowrie's `internet_facing_ip`, a new `ip` command, and a
+  173-package `dpkg -l` list consistent with the claimed release. Found by running the harness against
+  the live AWS deployment. New harness check `network-consistent`; committed results re-measured:
+  stock Cowrie 12 of 48, with the kit 35 of 48 (every check configuration can fix).
+  Any `ip ...` prints the `ip a` view and any `dpkg ...` prints the package list.
 - Community files: a fuller CONTRIBUTING guide, a Code of Conduct, issue forms (bug, wrong ATT&CK mapping,
   feature) and a pull request template. The README gains a documentation index, release verification
   steps and a short statement of purpose.
@@ -60,7 +66,7 @@ All notable changes to this project are recorded here. The format follows
   (previously: `connected.`, a ten-second hang, then wording real wget never prints). `captures` mode
   allows DNS only to two named resolvers. Selected with `EGRESS_MODE` in `.env`.
 - Two harness checks, `wget-failure-realistic` and `curl-failure-realistic`, keep that behavior from
-  regressing. The committed results are re-measured: stock Cowrie 12 of 47, with the kit 32 of 47.
+  regressing. The committed results are re-measured: stock Cowrie 12 of 47, with the kit 32 of 47 (since superseded by the 48-check run above).
 - Release pipeline (`release.yml`): a version tag builds both images, publishes them to GHCR, signs each by digest with Sigstore (keyless) and attaches a CycloneDX bill of materials to the GitHub release. CI also scans the full git history for secrets with Gitleaks.
 - Operations: `surya-kundal backup` (online, verified, private, optional gzip and rotation),
   `restore` (refuses to overwrite, keeps what it replaced, rejects damaged or newer-schema files),

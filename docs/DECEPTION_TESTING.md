@@ -15,10 +15,10 @@ wording real wget never uses, as seen on a live deployment. See "Failed download
 |---|---|---|
 | 1. Scanners and bots | 2 / 7 | **7 / 7** |
 | 2. Quick manual look | 8 / 18 | **18 / 18** |
-| 3. Skilled operator | 2 / 15 | 7 / 15 |
+| 3. Skilled operator | 2 / 16 | 10 / 16 |
 | 4. Protocol-aware tooling | 0 / 7 | 0 / 7 |
-| **Overall** | **12 / 47 (26%)** | **32 / 47 (68%)** |
-| Checks that configuration can fix | 12 / 32 | **32 / 32** |
+| **Overall** | **12 / 48 (25%)** | **35 / 48 (73%)** |
+| Checks that configuration can fix | 12 / 33 | **33 / 33** |
 
 Raw results are in `evaluation/results/`; `--compare` regenerates this table.
 
@@ -28,10 +28,20 @@ What the numbers say:
   or `df` finds nothing to separate it from Debian 12.
 - Tier 3 and 4 are mostly out of reach. Those checks look at how Cowrie is built (Twisted's SSH
   stack, Python command re-implementations, a filesystem derived from a container image). Fifteen of
-  the 47 checks are marked "config cannot fix", and the kit fails exactly those and nothing else.
-- Early runs showed two fixable gaps, both now closed: `/proc` listed only two process directories,
+  the 48 checks are marked "config cannot fix", and the kit fails exactly those and nothing else.
+- Early runs showed fixable gaps, all now closed: `/proc` listed only two process directories,
   and `free` reported the host's real memory while `/proc/meminfo` claimed 4 GB. The kit now
   generates one `/proc/<pid>` per `ps` row, and sets the persona's memory to the host's.
+  Later, a run against the live AWS deployment (32 of 47, every fixable check passing) showed three
+  more tells that the lab had missed, now fixed: `ifconfig` reported the container's Docker address
+  (172.x) while `/etc/resolv.conf` named a 10.20.0.x resolver, `ip a` said "command not found" on a
+  box that has `ifconfig`, and `dpkg -l` was empty. The kit now derives one network identity per
+  deployment (address, MAC, link-local address) and sets Cowrie's `internet_facing_ip` to it, adds an
+  `ip` command and a 173-package `dpkg -l` list consistent with the banner and kernel, and a new
+  check, `network-consistent`, verifies that `ifconfig`, `ip a` and `resolv.conf` agree.
+  Limitations: any `ip ...` invocation prints the `ip a` output, any `dpkg ...` invocation prints
+  the package list, and `ifconfig` still shows a random MAC and an invalid `fe6c::` link-local
+  address, because that command is built into Cowrie.
 - A skilled operator will still identify Cowrie. The kit raises the cost; it does not make the
   honeypot invisible. `cowrie/FINGERPRINTING.md` explains each gap.
 

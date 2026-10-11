@@ -3,13 +3,13 @@
   "summary": {
     "overall": {
       "passed": 12,
-      "total": 47,
-      "score": 0.255
+      "total": 48,
+      "score": 0.25
     },
     "fixable": {
       "passed": 12,
-      "total": 32,
-      "score": 0.375
+      "total": 33,
+      "score": 0.364
     },
     "tiers": {
       "1": {
@@ -24,8 +24,8 @@
       },
       "3": {
         "passed": 2,
-        "total": 15,
-        "score": 0.133
+        "total": 16,
+        "score": 0.125
       },
       "4": {
         "passed": 0,
@@ -76,7 +76,7 @@
       "tier": 1,
       "title": "Stock Cowrie accounts and wildcard passwords are refused",
       "status": "fail",
-      "detail": "accepted: phil, d6ce2626",
+      "detail": "accepted: phil, 6023eeee",
       "limit": false,
       "ref": "row 4"
     },
@@ -301,7 +301,7 @@
       "tier": 3,
       "title": "`uptime` agrees with /proc/uptime",
       "status": "pass",
-      "detail": "/proc/uptime 26.5 d, uptime 26 d",
+      "detail": "/proc/uptime 83.7 d, uptime 83 d",
       "limit": false,
       "ref": "row 13"
     },
@@ -348,6 +348,15 @@
       "status": "fail",
       "detail": "bash: line 1: ip: command not found",
       "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "network-consistent",
+      "tier": 3,
+      "title": "`ifconfig`, `ip a` and /etc/resolv.conf describe the same network",
+      "status": "fail",
+      "detail": "ifconfig 192.0.2.2, resolver 8.8.8.8, `ip a` differs",
+      "limit": false,
       "ref": "row 22"
     },
     {

@@ -26,6 +26,12 @@ hostname = stg-util02
 # deployment and keeps ps's START column and `top` in step with it.
 boot_offset = @BOOT_OFFSET@
 
+# The address `ifconfig` and other commands report. Unset, Cowrie reports whatever address its own
+# network has, which in a container is the Docker network (a 172.x address that contradicts the
+# 10.20.0.x resolver in /etc/resolv.conf) and on a laptop is a TEST-NET address. deploy.sh picks
+# one per deployment from the persona's seed, on the 10.20.0.0/24 network the resolver names.
+internet_facing_ip = @HOST_IP@
+
 # Real sshd has no idle timeout (ClientAliveInterval defaults to 0). Cowrie
 # disconnects an idle shell after 180 s, which a patient operator will notice.
 # Trade-off: idle sessions hold resources for longer.
@@ -93,5 +99,5 @@ enabled = true
 #                                Debian's sshd offers publickey,password: this matches
 # [telnet] enabled = false
 # [honeypot] auth_class = UserDB  (userdb.txt, see userdb.example.txt)
-# [honeypot] fake_addr, internet_facing_ip, out_addr: optional, unset on purpose
+# [honeypot] fake_addr, out_addr: optional, unset on purpose (internet_facing_ip is set above)
 # [honeypot] contents_path: not used; the overlay is baked into fs.pickle instead

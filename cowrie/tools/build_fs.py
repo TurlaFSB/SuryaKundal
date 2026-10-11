@@ -16,7 +16,11 @@ hashes):
      /etc/shadow (real sha512-crypt hashes of the passwords that userdb
      accepts, so an offline crack matches the login), /etc/{passwd,group,
      shadow}-, and the public host keys under /etc/ssh.
-  5. Renders the @TOKEN@ placeholders in txtcmds and cmdoutput.json.
+  5. Renders the @TOKEN@ placeholders in txtcmds and cmdoutput.json. They include a per-deployment
+     network identity (address, MAC, link-local address) drawn from its own random stream, so the
+     values already generated for an existing deployment do not change.
+  6. Adds the executables that txtcmds replace but that Cowrie's bundled filesystem lacks (`ip`),
+     because Cowrie only runs a text command whose path exists in the filesystem.
 
 The pickle format (10-field lists, A_*/T_* constants) is taken from
 cowrie/scripts/createfs.py, Cowrie 3.1.1. pickle.load() executes code from the
@@ -126,6 +130,11 @@ def put_file(root, path, data: bytes, uid, gid, mode, mtime, stats):
     node[A_REALFILE] = None
     stats["updated"] += 1
     return node
+
+
+# Commands answered by a text file in txtcmds/ whose executable Cowrie's bundled filesystem lacks.
+# Sizes are those of Debian 12's binaries (iproute2 6.1).
+TEXT_COMMAND_BINARIES = {"/usr/bin/ip": 722144}
 
 
 # ---------------------------------------------------------------- /proc/meminfo
@@ -304,6 +313,34 @@ def sha512_crypt(password: str, salt: str) -> str:
     return r.stdout.strip()
 
 
+# The persona sits on the 10.20.0.0/24 network that /etc/resolv.conf already names (resolver .2).
+PERSONA_NET = "10.20.0"
+PERSONA_RESOLVER_HOST = 2
+
+
+def network_identity(seed: str) -> dict:
+    """Address, MAC and link-local address for the persona, from a stream of its own.
+
+    A separate random stream keeps every value drawn elsewhere from the seed unchanged, so a
+    deployment that is updated does not suddenly get a new machine-id or root UUID.
+    """
+    rng = random.Random(f"{seed}:network")
+    host = rng.randint(20, 250)
+    if host == PERSONA_RESOLVER_HOST:  # pragma: no cover - the range excludes it
+        host += 1
+    # 52:54:00 is the QEMU/KVM prefix, the commonest on virtual machines.
+    mac = [0x52, 0x54, 0x00, rng.randint(0, 255), rng.randint(0, 255), rng.randint(0, 255)]
+    # IPv6 link-local from the MAC (EUI-64): flip the universal/local bit, insert ff:fe.
+    eui = [mac[0] ^ 0x02, mac[1], mac[2], 0xFF, 0xFE, mac[3], mac[4], mac[5]]
+    link_local = "fe80::" + ":".join(f"{eui[i] << 8 | eui[i + 1]:x}" for i in range(0, 8, 2))
+    return {
+        "HOST_IP": f"{PERSONA_NET}.{host}",
+        "HOST_BRD": f"{PERSONA_NET}.255",
+        "HOST_MAC": ":".join(f"{b:02x}" for b in mac),
+        "HOST_LINK_LOCAL": link_local,
+    }
+
+
 def render(text: str, tokens: dict) -> str:
     for k, v in tokens.items():
         text = text.replace(f"@{k}@", v)
@@ -354,6 +391,10 @@ def main() -> None:
         default=0,
         help="make the persona's MemTotal this many kB (default 0: keep the persona's own)",
     )
+    ap.add_argument(
+        "--persona-out",
+        help="write the network identity here as KEY=value lines (deploy.sh puts HOST_IP into cowrie.cfg)",
+    )
     ap.add_argument("--now", type=int, default=int(time.time()), help=argparse.SUPPRESS)
     a = ap.parse_args()
 
@@ -386,6 +427,7 @@ def main() -> None:
         "ROOT_UUID": root_uuid,
         "BOOT_DAY": time.strftime("%b%d", time.gmtime(boot_ts)),
         "UPTIME_DAYS": str(a.boot_offset // 86400),
+        **network_identity(a.seed),
     }
     stats = {"created": 0, "updated": 0, "removed": 0}
 
@@ -517,11 +559,21 @@ def main() -> None:
     processes = json.loads(cmd)["command"]["ps"]  # fail early if the template is invalid
     uids = {u["name"]: u["uid"] for u in users}
     proc_count = add_proc_entries(root, processes, uids, boot_ts, stats)
+    # Executables behind the text commands: Cowrie only runs a txtcmd if its path exists.
+    for path, size in TEXT_COMMAND_BINARIES.items():
+        if lookup(root, path, follow_final=True) is None:
+            node = put_file(root, path, b"", 0, 0, 0o100755, install_ts, stats)
+            node[A_SIZE] = size  # a plausible size; `ls -l` shows it, the content is the txtcmd
+
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "xb") as fh:
         pickle.dump(root, fh)
 
     # --- 7. txtcmds + cmdoutput
+    if a.persona_out:
+        Path(a.persona_out).write_text(
+            "".join(f"{k}={v}\n" for k, v in network_identity(a.seed).items()), encoding="ascii"
+        )
     txt_out = Path(a.txtcmds_out)
     for f in sorted(p for p in Path(a.txtcmds_src).rglob("*") if p.is_file()):
         dest = txt_out / f.relative_to(a.txtcmds_src)

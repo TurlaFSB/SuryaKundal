@@ -659,6 +659,24 @@ def _(p: Probe):
     return "not found" not in out and bool(out), out.splitlines()[0] if out else "no output"
 
 
+@check(
+    "network-consistent",
+    3,
+    "`ifconfig`, `ip a` and /etc/resolv.conf describe the same network",
+    ref="row 22",
+)
+def _(p: Probe):
+    addr = re.search(r"inet addr:(\d+\.\d+\.\d+\.\d+)", p.run("ifconfig"))
+    resolver = re.search(r"nameserver\s+(\d+\.\d+\.\d+\.\d+)", p.run("cat /etc/resolv.conf"))
+    if not addr or not resolver:
+        return False, "no address or no resolver to compare"
+    mine, theirs = addr.group(1), resolver.group(1)
+    same_net = mine.rsplit(".", 1)[0] == theirs.rsplit(".", 1)[0]
+    in_ip = mine in p.run("ip a")
+    detail = f"ifconfig {mine}, resolver {theirs}, `ip a` {'agrees' if in_ip else 'differs'}"
+    return same_net and in_ip, detail
+
+
 @check("sudo-l-sane", 3, "`sudo -l` gives a sensible answer", limit=True, ref="row 22")
 def _(p: Probe):
     out = p.run("sudo -l")

@@ -55,7 +55,9 @@ GOOD = {
     "ls /proc": " ".join(str(n) for n in range(1, 60)) + " acpi",
     "ls -ld /etc": "drwxr-xr-x 74 root root 4096 Oct  1 10:00 /etc",
     "dpkg -l | wc -l": "412",
-    "ip a": "1: lo: <LOOPBACK,UP>",
+    "ip a": "1: lo: <LOOPBACK,UP>\n2: eth0: inet 10.20.0.37/24 brd 10.20.0.255",
+    "ifconfig": "eth0      Link encap:Ethernet\n          inet addr:10.20.0.37  Bcast:10.20.0.255",
+    "cat /etc/resolv.conf": "domain corp.internal\nnameserver 10.20.0.2",
     "sudo -l": "User deploy may run the following commands",
     "echo hello | grep -c hello": "1",
     "wc -c /etc/hostname /etc/hosts": "11 /etc/hostname\n200 /etc/hosts\n211 total",
@@ -115,6 +117,31 @@ def test_a_consistent_persona_passes_tiers_one_to_three():
     results = dc.run_checks(FakeProbe(GOOD, lists=lists))
     failed = [(r.id, r.detail) for r in results if r.status != "pass"]
     assert failed == []
+
+
+def _network_result(**changes):
+    outputs = dict(GOOD)
+    outputs.update(changes)
+    return _by_id(dc.run_checks(FakeProbe(outputs)))["network-consistent"]
+
+
+def test_a_docker_address_that_contradicts_the_resolver_is_caught():
+    result = _network_result(
+        ifconfig="eth0\n          inet addr:172.29.77.2  Bcast:172.29.77.255",
+        **{"ip a": "2: eth0: inet 172.29.77.2/24"},
+    )
+    assert result.status == "fail"
+    assert "172.29.77.2" in result.detail
+
+
+def test_ifconfig_and_ip_that_disagree_are_caught():
+    result = _network_result(**{"ip a": "2: eth0: inet 10.20.0.99/24"})
+    assert result.status == "fail"
+    assert "differs" in result.detail
+
+
+def test_a_missing_ip_command_fails_the_network_check():
+    assert _network_result(**{"ip a": "bash: line 1: ip: command not found"}).status == "fail"
 
 
 def test_stock_cowrie_signals_are_caught():

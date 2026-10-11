@@ -2,13 +2,13 @@
   "label": "with-kit",
   "summary": {
     "overall": {
-      "passed": 32,
-      "total": 47,
-      "score": 0.681
+      "passed": 35,
+      "total": 48,
+      "score": 0.729
     },
     "fixable": {
-      "passed": 32,
-      "total": 32,
+      "passed": 33,
+      "total": 33,
       "score": 1.0
     },
     "tiers": {
@@ -23,9 +23,9 @@
         "score": 1.0
       },
       "3": {
-        "passed": 7,
-        "total": 15,
-        "score": 0.467
+        "passed": 10,
+        "total": 16,
+        "score": 0.625
       },
       "4": {
         "passed": 0,
@@ -220,7 +220,7 @@
       "tier": 2,
       "title": "`top` produces a normal header",
       "status": "pass",
-      "detail": "top - 09:41:07 up 57 days,  4:12,  1 user,  load average: 0.00, 0.01, 0.00",
+      "detail": "top - 09:41:07 up 78 days,  4:12,  1 user,  load average: 0.00, 0.01, 0.00",
       "limit": false,
       "ref": "row 7"
     },
@@ -301,7 +301,7 @@
       "tier": 3,
       "title": "`uptime` agrees with /proc/uptime",
       "status": "pass",
-      "detail": "/proc/uptime 57.1 d, uptime 57 d",
+      "detail": "/proc/uptime 78.7 d, uptime 78 d",
       "limit": false,
       "ref": "row 13"
     },
@@ -336,8 +336,8 @@
       "id": "dpkg-populated",
       "tier": 3,
       "title": "The package database is populated",
-      "status": "fail",
-      "detail": "1 lines",
+      "status": "pass",
+      "detail": "178 lines",
       "limit": true,
       "ref": "row 6"
     },
@@ -345,9 +345,18 @@
       "id": "ip-command",
       "tier": 3,
       "title": "`ip a` exists, as on any Debian 12",
-      "status": "fail",
-      "detail": "bash: line 1: ip: command not found",
+      "status": "pass",
+      "detail": "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000",
       "limit": true,
+      "ref": "row 22"
+    },
+    {
+      "id": "network-consistent",
+      "tier": 3,
+      "title": "`ifconfig`, `ip a` and /etc/resolv.conf describe the same network",
+      "status": "pass",
+      "detail": "ifconfig 10.20.0.230, resolver 10.20.0.2, `ip a` agrees",
+      "limit": false,
       "ref": "row 22"
     },
     {
@@ -364,7 +373,7 @@
       "tier": 3,
       "title": "`ls -l` dates look like GNU ls (May  4 14:44), not ISO",
       "status": "fail",
-      "detail": "-rw-r--r-- 1 root root 11 2025-07-27 01:49 /etc/hostname",
+      "detail": "-rw-r--r-- 1 root root 11 2026-03-07 07:31 /etc/hostname",
       "limit": true,
       "ref": "row 22"
     },
