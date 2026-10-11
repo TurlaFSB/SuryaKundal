@@ -39,6 +39,8 @@ What the numbers say:
   deployment (address, MAC, link-local address) and sets Cowrie's `internet_facing_ip` to it, adds an
   `ip` command and a 173-package `dpkg -l` list consistent with the banner and kernel, and a new
   check, `network-consistent`, verifies that `ifconfig`, `ip a` and `resolv.conf` agree.
+  Re-run against the live AWS deployment after the fix: 35 of 48, every fixable check passing,
+  identical to the lab result.
   Limitations: any `ip ...` invocation prints the `ip a` output, any `dpkg ...` invocation prints
   the package list, and `ifconfig` still shows a random MAC and an invalid `fe6c::` link-local
   address, because that command is built into Cowrie.
