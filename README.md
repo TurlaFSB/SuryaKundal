@@ -26,6 +26,7 @@ Surya Kundal is the analysis layer for a [Cowrie](https://github.com/cowrie/cowr
 - [Why this exists](#why-this-exists)
 - [Architecture](#architecture)
 - [Quick start](#quick-start)
+- [Releases](#releases)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Components](#components)
@@ -304,7 +305,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md); t
 | 5 | Wazuh rules | Done (verified on Wazuh 4.14.7) |
 | 6 | Web dashboard | Done |
 | 7 | Docker Compose for the full stack | Done: pipeline, dashboard and honeypot containers, image scanning, SBOM |
-| 8 | Cloud deployment and real-world data collection | In progress: v0.2.0 released, deployment guide written and audited |
+| 8 | Cloud deployment and real-world data collection | In progress: deployed on a hardened AWS instance and recording real attacks; v0.2.0 released |
 | 9 | Write-up and demonstration | Planned |
 
 Only free tiers and free offline datasets are used; no paid service is required.
