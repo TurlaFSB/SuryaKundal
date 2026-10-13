@@ -215,8 +215,25 @@ def test_geo_is_stored_per_ip(db, tmp_path):
     assert result.geo == 2
     known = db.get(IpGeo, PUBLIC_IP)
     assert (known.country_code, known.asn, known.as_org) == ("US", 15169, "GOOGLE")
+    assert known.region == "California"
     assert db.get(IpGeo, OTHER_IP).country_code is None
+    assert db.get(IpGeo, OTHER_IP).region == ""  # looked up, none known
     assert enrich_pending(db, geo=GeoIPLookup(tmp_path), now=NOW).geo == 0
+
+
+def test_regions_are_filled_in_for_addresses_located_before_the_column_existed(db, tmp_path):
+    build_mmdb(tmp_path / CITY_DB, "GeoLite2-City", CITY_RECORDS)
+    build_mmdb(tmp_path / ASN_DB, "GeoLite2-ASN", ASN_RECORDS)
+    _session(db, "a", PUBLIC_IP)
+    db.add(IpGeo(ip=PUBLIC_IP, country_code="US", city="Mountain View", looked_up_at=NOW))
+    db.commit()
+    assert db.get(IpGeo, PUBLIC_IP).region is None
+
+    result = enrich_pending(db, geo=GeoIPLookup(tmp_path), now=NOW)
+
+    assert result.geo == 0  # not a new lookup
+    assert db.get(IpGeo, PUBLIC_IP).region == "California"
+    assert db.get(IpGeo, PUBLIC_IP).city == "Mountain View"  # nothing else touched
 
 
 def test_missing_geo_databases_store_nothing_so_a_later_run_can_fill_in(db, tmp_path):

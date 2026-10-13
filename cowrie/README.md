@@ -73,7 +73,7 @@ From ANOTHER machine:
 ```
 ssh -p 2222 -v root@<vm-ip>                  # banner should be OpenSSH_9.2p1 Debian-2+deb12u10, no pre-login text
 ssh -p 2222 deploy@<vm-ip>                   # password deploy123 works
-ssh -p 2222 root@<vm-ip>                     # root/123456 must be refused; Passw0rd! works
+ssh -p 2222 root@<vm-ip>                     # a random password must be refused; Passw0rd! works
 ```
 
 Inside the session: `uname -a`, `cat /etc/os-release`, `hostname`, `uptime`,
@@ -86,6 +86,29 @@ tail -f ~/cowrie/var/log/cowrie/cowrie.json
 ```
 
 Check that `cowrie.cfg` got merged: `cd ~/cowrie && bin/cowrie status`.
+
+## Decoy files
+
+Many scanners log in, run `uname` and leave. The ones that stay (operators and the more capable
+bots) look for things worth taking, so the kit plants some, in `lures-overlay/`:
+
+| Where | What |
+|---|---|
+| `/root/.aws/credentials`, `/opt/app/.env`, `/root/.docker/config.json` | made-up cloud, database and registry credentials |
+| `/root/.ssh/` | `id_ed25519` and its public key, a `config` and a `known_hosts` that point at two made-up internal hosts |
+| `/root/.bash_history` | a short admin history that mentions those files and hosts |
+| `/home/deploy/backup.sh`, `/etc/cron.d/backup` | a nightly database dump script and its cron entry |
+
+Nothing here is real. The AWS key, database password, application secret and the three host keys are
+generated per deployment from the persona seed (separate random streams, so the machine-id,
+`/etc/shadow` and every other value stay what they were) and are **never committed**: a fixed key in
+a public repository would identify every deployment that uses it. The SSH key pair is made by
+`ssh-keygen` at the first deploy and kept next to the host keys, so it does not change on restart; it
+opens nothing. Without `ssh-keygen` the key files are simply left out.
+
+Reading these files maps to ATT&CK credential-access techniques (T1552.001, .003 and .004), which
+makes it measurable: the dashboard's session pages show who went looking. Nothing the attacker
+does with the values can leave the machine, because egress is blocked.
 
 ## Rollback
 

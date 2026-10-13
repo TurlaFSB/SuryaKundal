@@ -266,6 +266,7 @@ class IpGeo(Base):
     country_code: Mapped[str | None] = mapped_column(String(2), index=True)
     country_name: Mapped[str | None] = mapped_column(String(128))
     city: Mapped[str | None] = mapped_column(String(128))
+    region: Mapped[str | None] = mapped_column(String(128))  # state or province; "" = none known
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
     accuracy_radius_km: Mapped[int | None] = mapped_column(Integer)

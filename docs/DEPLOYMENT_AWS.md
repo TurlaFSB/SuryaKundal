@@ -118,7 +118,7 @@ ssh -p 22 root@<address>                       # the honeypot's banner; weak pas
 python evaluation/deception_check.py <address> --port 22 --user root --password toor
 ```
 
-`toor` is one of the passwords the `collect` policy accepts (`123456` is not). The test sessions are
+`toor` is one of the passwords the `collect` policy accepts; a made-up one is refused. The test sessions are
 recorded like any other, so add your address to `INTERNAL_NETWORKS` first (step 4) to keep them out
 of the statistics.
 

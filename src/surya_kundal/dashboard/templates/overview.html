@@ -12,13 +12,30 @@
 <div class="grid">
 <section class="panel wide">
   <h2>Where visitors come from</h2>
-  <svg class="map" viewBox="0 0 960 480" role="img" aria-label="World map of attacker locations">
-    <image href="{{ url_for('static', filename='world.svg') }}" width="960" height="480"/>
-    {% for pt in points %}
-    {% set xy = project(pt.longitude, pt.latitude) %}
-    <circle class="dot" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ [4 + pt.sessions ** 0.5, 12] | min | round(1) }}"><title>{{ pt.ip | p }}{% if pt.city %}, {{ pt.city | p }}{% endif %}{% if pt.country %} ({{ pt.country | p }}){% endif %}: {{ pt.sessions }} sessions</title></circle>
-    {% endfor %}
-  </svg>
+  <div class="mapbox" id="mapbox">
+    <svg class="map" id="map" viewBox="0 12 960 392" role="group" aria-label="Map of attacker locations. Each dot is one address; use Tab to move between dots.">
+      <image href="{{ url_for('static', filename='world.svg') }}" width="960" height="480"/>
+      <g class="dots">
+      {% for pt in points %}
+      {% set xy = project(pt.longitude, pt.latitude) %}
+      {% set place = [pt.city, pt.region, pt.country] | select | join(', ') %}
+      <circle class="dot{% if pt.abuse is not none and pt.abuse >= 75 %} hot{% elif pt.abuse is not none and pt.abuse >= 25 %} warm{% endif %}" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="{{ [4 + pt.sessions ** 0.5, 12] | min | round(1) }}"
+        tabindex="0" role="link" data-base="{{ [4 + pt.sessions ** 0.5, 12] | min | round(1) }}"
+        data-href="{{ url_for('sessions', q=pt.ip) }}" data-ip="{{ pt.ip | p }}" data-place="{{ place | p }}"
+        data-network="{{ ((pt.network or '') ~ (' (AS' ~ pt.asn ~ ')' if pt.asn else '')) | p }}"
+        data-sessions="{{ pt.sessions }}" data-abuse="{{ '' if pt.abuse is none else pt.abuse }}"
+        data-seen="{{ pt.last_seen | ago }}"><title>{{ pt.ip | p }}{% if place %}, {{ place | p }}{% endif %}: {{ pt.sessions }} sessions</title></circle>
+      {% endfor %}
+      </g>
+    </svg>
+    <div class="map-tip" id="map-tip" hidden></div>
+    <div class="map-ctl" id="map-ctl" hidden>
+      <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+      <button type="button" data-zoom="out" aria-label="Zoom out">&minus;</button>
+      <button type="button" data-zoom="reset" aria-label="Reset the map">Reset</button>
+    </div>
+  </div>
+  <p class="legend muted"><span class="key"><i class="dot-key"></i> unrated or low abuse score</span> <span class="key"><i class="dot-key warm"></i> reported (25+)</span> <span class="key"><i class="dot-key hot"></i> heavily reported (75+)</span> Dot size follows the number of sessions. Scroll or drag to zoom and pan; click a dot to list that address's sessions.</p>
   {% if not points %}<p class="muted">No located visitors yet. Run <code>surya-kundal enrich</code>; private and local addresses have no location.</p>{% endif %}
 </section>
 
@@ -53,6 +70,20 @@
   <h2>Top countries</h2>
   <ul class="plain">
     {% for code, n in countries %}<li><a href="{{ url_for('sessions', country=code) }}">{{ code | p }}</a> <span class="num">{{ n }}</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Top places</h2>
+  <ul class="plain">
+    {% for pl in places %}<li>{{ pl.label | p }}{% if pl.detail %} <span class="muted">{{ pl.detail | p }}</span>{% endif %} <span class="num" title="{{ pl.sources }} address{{ '' if pl.sources == 1 else 'es' }}">{{ pl.sessions }}</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Top networks</h2>
+  <ul class="plain">
+    {% for nw in networks %}<li>{{ nw.label | p }}{% if nw.detail %} <span class="muted">{{ nw.detail | p }}</span>{% endif %} <span class="num" title="{{ nw.sources }} address{{ '' if nw.sources == 1 else 'es' }}">{{ nw.sessions }}</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}
   </ul>
 </section>
 
@@ -95,3 +126,4 @@
 {% endif %}
 </div>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='map.js') }}" defer></script>{% endblock %}

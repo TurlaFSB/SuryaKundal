@@ -21,6 +21,9 @@ hashes):
      values already generated for an existing deployment do not change.
   6. Adds the executables that txtcmds replace but that Cowrie's bundled filesystem lacks (`ip`),
      because Cowrie only runs a text command whose path exists in the filesystem.
+  7. Adds lures (credentials, keys, history, a backup script) that make the machine look worth
+     exploring. Their secrets are made up per deployment from a separate random stream, so they
+     are never in the repository and the values above do not move.
 
 The pickle format (10-field lists, A_*/T_* constants) is taken from
 cowrie/scripts/createfs.py, Cowrie 3.1.1. pickle.load() executes code from the
@@ -30,6 +33,7 @@ file: only ever load pickles you built or that ship with Cowrie.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -350,6 +354,77 @@ def render(text: str, tokens: dict) -> str:
     return text
 
 
+# ---------------------------------------------------------------------- lures
+LURE_DIRS = {
+    "/root/.ssh": 0o40700,
+    "/root/.aws": 0o40700,
+    "/root/.docker": 0o40700,
+    "/opt/app": 0o40755,
+}
+LURE_PRIVATE = re.compile(r"^/(root/\.(ssh|aws|docker)/|root/\.bash_history$|opt/app/\.env$)")
+
+
+def lure_tokens(seed: str) -> dict:
+    """Made-up secrets for the lure files. They come from their own random stream so adding
+    or changing lures never moves the values another part of the build draws, and they are
+    generated here, never committed: a fixed key in a public repository would be a signature."""
+    r = random.Random(f"{seed}:lures")
+    upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    alnum = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    def host_key() -> str:
+        blob = b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20" + bytes(
+            r.getrandbits(8) for _ in range(32)
+        )
+        return base64.b64encode(blob).decode()
+
+    db_pass = "".join(r.choice(alnum) for _ in range(16))
+    return {
+        "LURE_AWS_KEY_ID": "AKIA" + "".join(r.choice(upper) for _ in range(16)),
+        "LURE_AWS_SECRET": "".join(r.choice(b64) for _ in range(40)),
+        "LURE_DB_PASS": db_pass,
+        "LURE_APP_SECRET": "%050x" % r.getrandbits(200),
+        "LURE_DOCKER_AUTH": base64.b64encode(f"deploy:{db_pass}".encode()).decode(),
+        "LURE_HOSTKEY_1": host_key(),
+        "LURE_HOSTKEY_2": host_key(),
+        "LURE_HOSTKEY_3": host_key(),
+    }
+
+
+def install_lures(
+    root, src: Path, key_dir: Path | None, seed: str, hostname: str, install_ts, stats
+) -> int:
+    """Write the lure files into the pickle. Returns how many were added."""
+    r = random.Random(f"{seed}:lure-times")
+    tokens = lure_tokens(seed)
+    for path, mode in LURE_DIRS.items():
+        node = mkdirs(root, path, install_ts, 0, 0, mode)
+        node[A_UID], node[A_GID], node[A_MODE] = 0, 0, mode
+    files: list[tuple[str, bytes, int, int, int]] = []
+    for f in sorted(p for p in src.rglob("*") if p.is_file()):
+        rel = "/" + f.relative_to(src).as_posix()
+        owner = "deploy" if rel.startswith("/home/deploy/") else "root"
+        uid, gid = HOME_OWNERS[owner]
+        mode = 0o100600 if LURE_PRIVATE.match(rel) else 0o100644
+        if rel.endswith(".sh"):
+            mode = 0o100750
+        files.append((rel, render(f.read_text(encoding="utf-8"), tokens).encode(), uid, gid, mode))
+    # The private key is made at deploy time and kept with the host keys, so it does not
+    # change when the honeypot restarts. Without ssh-keygen there is no key file, and none is added.
+    if key_dir is not None:
+        private, public = key_dir / "lure_id_ed25519", key_dir / "lure_id_ed25519.pub"
+        if private.is_file() and public.is_file():
+            pub_line = public.read_text(encoding="ascii").split()
+            comment = f"root@{hostname}"
+            files.append(("/root/.ssh/id_ed25519", private.read_bytes(), 0, 0, 0o100600))
+            pub = f"{pub_line[0]} {pub_line[1]} {comment}\n".encode()
+            files.append(("/root/.ssh/id_ed25519.pub", pub, 0, 0, 0o100644))
+    for rel, data, uid, gid, mode in files:
+        put_file(root, rel, data, uid, gid, mode, install_ts + r.randint(0, 3600), stats)
+    return len(files)
+
+
 # ------------------------------------------------------------------------ main
 def main() -> None:
     ap = argparse.ArgumentParser(
@@ -369,6 +444,9 @@ def main() -> None:
     ap.add_argument("--txtcmds-out", required=True)
     ap.add_argument("--cmdoutput-src", required=True)
     ap.add_argument("--cmdoutput-out", required=True)
+    ap.add_argument(
+        "--lures-src", help="directory of lure files (credentials, history, scripts) to add"
+    )
     ap.add_argument(
         "--hostkey-dir",
         help="dir holding Cowrie's ssh_host_*_key.pub (public keys are mirrored into /etc/ssh)",
@@ -480,6 +558,18 @@ def main() -> None:
                 mode = 0o100600
         jitter = rng.randint(0, 3600)
         put_file(root, rel, data, uid, gid, mode, install_ts + jitter, stats)
+
+    lure_count = 0
+    if a.lures_src:
+        lure_count = install_lures(
+            root,
+            Path(a.lures_src),
+            Path(a.hostkey_dir) if a.hostkey_dir else None,
+            a.seed,
+            (overlay / "etc/hostname").read_text().strip(),
+            install_ts,
+            stats,
+        )
 
     # --- 4. generated files
     put_file(
@@ -597,6 +687,8 @@ def main() -> None:
     print(
         f"boot       : {tokens['UPTIME_DAYS']} days before start, ps START column = {tokens['BOOT_DAY']}"
     )
+    if a.lures_src:
+        print(f"lures      : {lure_count} files (credentials, keys, history, backup script)")
 
 
 if __name__ == "__main__":

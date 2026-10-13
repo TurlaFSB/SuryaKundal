@@ -1,0 +1,2 @@
+# staging database backup
+17 2 * * * deploy /home/deploy/backup.sh >/dev/null 2>&1

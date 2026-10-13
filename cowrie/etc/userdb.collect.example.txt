@@ -4,6 +4,10 @@
 # record their sessions. Everything not listed is still refused, so a scanner
 # that tests a random password does not succeed on the first request.
 #
+# The list includes 123456, 123, 1, root, 12345678 and 111 because two days of live
+# traffic showed that bots try those first, usually once per connection, and about one
+# failed guess in seven was one of them.
+#
 # Use userdb.example.txt ("stealth", three exact pairs) instead when the goal is
 # to look as much like a real hardened-but-weak box as possible and you accept
 # that very few automated attackers will get in.
@@ -38,6 +42,12 @@ root:x:ubuntu
 root:x:debian
 root:x:Welcome1
 root:x:Admin@123
+root:x:123456
+root:x:12345678
+root:x:123
+root:x:111
+root:x:1
+root:x:root
 root:x:Passw0rd!
 deploy:x:deploy
 deploy:x:deploy123

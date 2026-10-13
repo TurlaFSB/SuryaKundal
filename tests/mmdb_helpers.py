@@ -32,6 +32,7 @@ CITY_RECORDS = {
     "8.8.8.0/24": {
         "country": {"iso_code": "US", "names": {"en": "United States"}},
         "city": {"names": {"en": "Mountain View"}},
+        "subdivisions": [{"iso_code": "CA", "names": {"en": "California"}}],
         "location": {"latitude": 37.386, "longitude": -122.0838, "accuracy_radius": 1000},
     }
 }

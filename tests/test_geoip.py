@@ -22,6 +22,7 @@ def test_lookup_returns_location_and_asn(db_dir):
     assert info.country_code == "US"
     assert info.country_name == "United States"
     assert info.city == "Mountain View"
+    assert info.region == "California"
     assert info.latitude == pytest.approx(37.386)
     assert info.longitude == pytest.approx(-122.0838)
     assert info.accuracy_radius_km == 1000

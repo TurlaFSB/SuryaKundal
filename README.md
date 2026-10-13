@@ -51,11 +51,11 @@ A stock honeypot produces a log, not an answer. Raw `cowrie.json` is a stream of
 | **Enrichment** | Offline geolocation and ASN (MaxMind GeoLite2), AbuseIPDB score and Tor exit check per IP, VirusTotal verdict per file. Each indicator is looked up once, and daily budgets stay within free-tier limits. |
 | **ATT&CK mapping** | 70+ reviewable rules map commands, logins, transfers and tunnelling to techniques. Each rule carries positive and negative examples, and every technique ID is validated against the vendored ATT&CK Enterprise v19 catalogue. |
 | **SIEM integration** | Wazuh rules generated from the same ATT&CK rules, so the database and the SIEM agree. Includes brute-force, rapid-reconnaissance and honeypot-fingerprinting alerts. |
-| **Dashboard** | Attack map, session-depth funnel, fingerprinting-attempt panel, ATT&CK matrix, session drill-down and optional Wazuh alerts. Server-rendered, read-only, strict Content-Security-Policy. |
+| **Dashboard** | Zoomable attack map with country and US state borders and per-address details (city, state, network, abuse score), session-depth funnel, fingerprinting-attempt panel, ATT&CK matrix, session drill-down and optional Wazuh alerts. Server-rendered, read-only, strict Content-Security-Policy. |
 | **Campaigns and IOC export** | Groups sessions that share a payload, script or tooling fingerprint, with the evidence for each link. Exports indicators (CSV, STIX 2.1, blocklist, nftables) with confidence scores; addresses that were only typed in commands are labelled unverified and need several independent sources. |
 | **Your own traffic stays out** | Sessions from private, loopback and configured networks (`INTERNAL_NETWORKS`) are tagged and excluded from the dashboard, exports and campaigns, so testing never pollutes real data. |
 | **Egress control** | `cowrie/egress.sh` blocks everything the honeypot could use to attack others or reach your network, fails closed while containers rebuild, and verifies itself from inside the container. |
-| **Deception kit** | Hardened Cowrie configuration, a believable Debian filesystem and login policy, and a documented threat model of what still gives a honeypot away. |
+| **Deception kit** | Hardened Cowrie configuration, a believable Debian filesystem and login policy, decoy credentials and keys that draw operators in, and a documented threat model of what still gives a honeypot away. |
 
 ## Architecture
 

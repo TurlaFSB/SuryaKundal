@@ -109,9 +109,19 @@ def _enrich_geo(
         if info is not None:
             for name, value in vars(info).items():
                 setattr(row, name, value)
+        row.region = row.region or ""  # "" = looked up, none known (NULL = not looked up yet)
         db.add(row)
         result.geo += 1
+    _fill_regions(db, geo)
     db.commit()
+
+
+def _fill_regions(db: Session, geo: GeoIPLookup) -> None:
+    """Add the state or region to addresses located before that column existed. Offline and
+    cheap: it reads the local database again and changes nothing else about the row."""
+    for row in db.scalars(select(IpGeo).where(IpGeo.region.is_(None))):
+        info = geo.lookup(row.ip)
+        row.region = (info.region if info is not None else None) or ""
 
 
 def _enrich_tor(

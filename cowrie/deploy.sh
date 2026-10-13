@@ -215,6 +215,9 @@ if ((HAVE_KEYGEN)); then
     [[ -f "$KEY_DIR/ssh_host_rsa_key" ]] || gen_key rsa 3072 "$KEY_DIR/ssh_host_rsa_key"
     [[ -f "$KEY_DIR/ssh_host_ecdsa_key" ]] || gen_key ecdsa 256 "$KEY_DIR/ssh_host_ecdsa_key"
     [[ -f "$KEY_DIR/ssh_host_ed25519_key" ]] || gen_key ed25519 0 "$KEY_DIR/ssh_host_ed25519_key"
+    # A key for the lure files (root's ~/.ssh/id_ed25519). Kept with the host keys so it is the
+    # same after a restart; it opens nothing.
+    [[ -f "$KEY_DIR/lure_id_ed25519" ]] || gen_key ed25519 0 "$KEY_DIR/lure_id_ed25519"
     if [[ -f "$rsa_pub" ]]; then
         bits="$(ssh-keygen -lf "$rsa_pub" | awk '{print $1}')"
         if [[ "$bits" != 3072 ]]; then
@@ -265,6 +268,7 @@ fi
     --cmdoutput-out "$BUILD/cmdoutput.json" \
     --hostkey-dir "$KEY_DIR" \
     --persona-out "$BUILD/persona.env" \
+    --lures-src "$KIT_DIR/lures-overlay" \
     --seed "$SEED" \
     --boot-offset "$BOOT_OFFSET" \
     --now "$DEPLOY_EPOCH" | sed 's/^/  /'

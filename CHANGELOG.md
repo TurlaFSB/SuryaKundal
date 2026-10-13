@@ -22,6 +22,18 @@ All notable changes to this project are recorded here. The format follows
   same hosts, and the campaign rebuild uses less memory.
 
 ### Added
+- Dashboard map rebuilt: real country borders and US state borders (Natural Earth, from the
+  `world-atlas` and `us-atlas` packages; `tools/make_world_map.mjs` regenerates the file), zoom and pan,
+  and a details box on hover or keyboard focus with address, city, state or region, network, abuse score
+  and last visit. Dots are coloured by abuse score, and a click lists that address's sessions. New
+  "Top places" and "Top networks" panels. The state or region is stored per address (migration 0012;
+  addresses located earlier are filled in on the next enrichment pass, offline). The map and scripts are
+  cached by the browser, pages are not.
+- Decoy files for the honeypot (`cowrie/lures-overlay/`): made-up AWS and database credentials, an SSH key
+  pair, shell history, a backup script and cron entry, generated per deployment and never committed.
+- The `collect` login policy also accepts `123456`, `12345678`, `123`, `111`, `1` and `root` for root. Two
+  days of live traffic showed bots try these first and usually once per connection; about one failed
+  guess in seven was one of them.
 - Deception kit: a per-deployment network identity (address, MAC, link-local address on the resolver's
   10.20.0.0/24) used by `ifconfig` through Cowrie's `internet_facing_ip`, a new `ip` command, and a
   173-package `dpkg -l` list consistent with the claimed release. Found by running the harness against

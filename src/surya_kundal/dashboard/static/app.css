@@ -97,3 +97,24 @@ main > .panel + .panel, main > p { margin-top: 16px; }
   .facts { grid-template-columns: 1fr; gap: 0; } .facts dd { margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: no-preference) { a, .cell, .top nav a { transition: background-color .15s, color .15s; } }
+
+/* Attacker map: zoom, pan, hover details */
+.mapbox { position: relative; }
+.map { touch-action: none; cursor: grab; }
+.map.dragging { cursor: grabbing; }
+.dot { vector-effect: non-scaling-stroke; cursor: pointer; }
+.dot.warm { fill: var(--warm); }
+.dot.hot { fill: var(--alert); }
+.dot:hover, .dot:focus-visible { stroke: var(--ink); stroke-width: 2; outline: none; }
+.map-tip { position: absolute; z-index: 2; min-width: 190px; max-width: 280px; padding: 10px 12px; border-radius: 10px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+  font-size: .82rem; line-height: 1.5; pointer-events: none; }
+.map-tip strong { display: block; margin-bottom: 2px; font-size: .9rem; }
+.map-tip span { display: inline-block; min-width: 82px; color: var(--muted); }
+.map-ctl { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.map-ctl button { padding: 4px 11px; background: color-mix(in srgb, var(--surface) 92%, transparent); font-size: .85rem; cursor: pointer; }
+.legend { margin: 10px 0 0; }
+.legend .key { margin-right: 14px; white-space: nowrap; }
+.dot-key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); vertical-align: -1px; }
+.dot-key.warm { background: var(--warm); }
+.dot-key.hot { background: var(--alert); }

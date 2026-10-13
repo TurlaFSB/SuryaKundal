@@ -29,6 +29,7 @@ class GeoInfo:
     country_code: str | None = None
     country_name: str | None = None
     city: str | None = None
+    region: str | None = None
     latitude: float | None = None
     longitude: float | None = None
     accuracy_radius_km: int | None = None
@@ -126,6 +127,7 @@ class GeoIPLookup:
                 country_code=country.get("iso_code"),
                 country_name=_name(country),
                 city=_name(record.get("city")),
+                region=_name((record.get("subdivisions") or [None])[0]),
                 latitude=location.get("latitude"),
                 longitude=location.get("longitude"),
                 accuracy_radius_km=location.get("accuracy_radius"),

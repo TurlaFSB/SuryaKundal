@@ -43,6 +43,9 @@ def factory(tmp_path):
                 ip="203.0.113.7",
                 country_code="AU",
                 city="Sydney",
+                region="New South Wales",
+                as_org="Example Hosting",
+                asn=64500,
                 latitude=-33.9,
                 longitude=151.2,
                 looked_up_at=NOW,
@@ -86,9 +89,55 @@ def test_map_points_countries_and_hourly(db):
     points = queries.map_points(db)
     assert [(p.ip, p.country, p.sessions) for p in points] == [("203.0.113.7", "AU", 2)]
     assert queries.top_countries(db)[0] == ("AU", 2)
-    assert len(queries.hourly_activity(db, now=NOW)) == 24
-    old = NOW - timedelta(days=400)
-    assert sum(queries.hourly_activity(db, now=old)) == 0
+    point = points[0]
+    assert (point.city, point.region, point.network, point.asn) == (
+        "Sydney", "New South Wales", "Example Hosting", 64500,
+    )  # fmt: skip
+    assert point.abuse == 88 and point.last_seen is not None
+
+
+def test_top_places_and_networks(db):
+    place = queries.top_places(db)[0]
+    assert (place.label, place.detail, place.sessions, place.sources) == (
+        "Sydney", "New South Wales, AU", 2, 1,
+    )  # fmt: skip
+    network = queries.top_networks(db)[0]
+    assert (network.label, network.detail, network.sessions) == ("Example Hosting", "AS64500", 2)
+
+
+def test_overview_map_carries_details_and_loads_its_script(factory):
+    html = _client(factory).get("/").get_data(as_text=True)
+    assert 'data-place="Sydney, New South Wales, AU"' in html
+    assert 'data-network="Example Hosting (AS64500)"' in html
+    assert 'data-abuse="88"' in html and "dot hot" in html
+    assert "/static/map.js" in html and "Top places" in html and "Top networks" in html
+    assert " style=" not in html and "onclick" not in html
+
+
+def test_static_files_may_be_cached_but_pages_never(factory):
+    client = _client(factory)
+    with client.get("/static/map.js") as response:  # closing it releases the file handle
+        assert response.headers["Cache-Control"] == "no-cache"
+    assert client.get("/").headers["Cache-Control"] == "no-store"
+
+
+def test_region_migration_adds_the_column_once(tmp_path):
+    from alembic import command
+    from sqlalchemy import inspect
+
+    from surya_kundal.database.migrate import alembic_config, upgrade_database
+
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'm.db'}")
+    config = alembic_config()
+    with engine.begin() as connection:  # a database as the previous release left it
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0011")
+    assert "region" not in {c["name"] for c in inspect(engine).get_columns("ip_geo")}
+
+    upgrade_database(engine)
+    upgrade_database(engine)  # running it again changes nothing
+
+    assert "region" in {c["name"] for c in inspect(engine).get_columns("ip_geo")}
 
 
 def test_sessions_page_filters_and_clamps(db):

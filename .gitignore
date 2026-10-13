@@ -42,3 +42,6 @@ dist/
 .mypy_cache/
 coverage.xml
 htmlcov/
+
+# The honeypot's decoy files hold no real secrets (they carry placeholders), so they are tracked.
+!cowrie/lures-overlay/**/.env

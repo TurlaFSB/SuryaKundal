@@ -141,6 +141,21 @@ class MapPoint:
     country: str | None
     city: str | None
     sessions: int
+    region: str | None = None
+    network: str | None = None  # the organisation that owns the address (ASN name)
+    asn: int | None = None
+    abuse: int | None = None  # AbuseIPDB confidence score, 0 to 100
+    last_seen: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Place:
+    """A place or network that attackers came from, with how many of them."""
+
+    label: str
+    detail: str
+    sessions: int
+    sources: int
 
 
 @dataclass(frozen=True)
@@ -303,6 +318,11 @@ def depth(db: Session) -> Depth:
 
 
 def map_points(db: Session) -> list[MapPoint]:
+    abuse = (
+        select(IpIntel.score)
+        .where(IpIntel.ip == IpGeo.ip, IpIntel.provider == "abuseipdb")
+        .scalar_subquery()
+    )
     rows = db.execute(
         select(
             IpGeo.ip,
@@ -311,6 +331,11 @@ def map_points(db: Session) -> list[MapPoint]:
             IpGeo.country_code,
             IpGeo.city,
             func.count(HoneypotSession.id),
+            IpGeo.region,
+            IpGeo.as_org,
+            IpGeo.asn,
+            abuse,
+            func.max(HoneypotSession.start_time),
         )
         .join(HoneypotSession, HoneypotSession.src_ip == IpGeo.ip)
         .where(IpGeo.latitude.is_not(None), IpGeo.longitude.is_not(None), _real())
@@ -319,9 +344,62 @@ def map_points(db: Session) -> list[MapPoint]:
         .limit(500)
     ).all()
     return [
-        MapPoint(r[0], r[1], r[2], r[3], r[4], r[5])
+        MapPoint(r[0], r[1], r[2], r[3], r[4], r[5], r[6] or None, r[7], r[8], r[9], r[10])
         for r in rows
         if r[1] is not None and r[2] is not None
+    ]
+
+
+def top_places(db: Session, limit: int = 8) -> list[Place]:
+    """Cities (with their state or region) that sent the most sessions."""
+    rows = db.execute(
+        select(
+            IpGeo.city,
+            IpGeo.region,
+            IpGeo.country_code,
+            func.count(HoneypotSession.id),
+            func.count(func.distinct(HoneypotSession.src_ip)),
+        )
+        .join(HoneypotSession, HoneypotSession.src_ip == IpGeo.ip)
+        .where(IpGeo.city.is_not(None), _real())
+        .group_by(IpGeo.city, IpGeo.region, IpGeo.country_code)
+        .order_by(func.count(HoneypotSession.id).desc())
+        .limit(limit)
+    ).all()
+    return [
+        Place(
+            label=str(r[0]),
+            detail=", ".join(x for x in (r[1], r[2]) if x),
+            sessions=int(r[3]),
+            sources=int(r[4]),
+        )
+        for r in rows
+    ]
+
+
+def top_networks(db: Session, limit: int = 8) -> list[Place]:
+    """Networks (hosting providers, ISPs) that sent the most sessions."""
+    rows = db.execute(
+        select(
+            IpGeo.as_org,
+            IpGeo.asn,
+            func.count(HoneypotSession.id),
+            func.count(func.distinct(HoneypotSession.src_ip)),
+        )
+        .join(HoneypotSession, HoneypotSession.src_ip == IpGeo.ip)
+        .where(IpGeo.as_org.is_not(None), _real())
+        .group_by(IpGeo.asn, IpGeo.as_org)
+        .order_by(func.count(HoneypotSession.id).desc())
+        .limit(limit)
+    ).all()
+    return [
+        Place(
+            label=str(r[0]),
+            detail=f"AS{r[1]}" if r[1] else "",
+            sessions=int(r[2]),
+            sources=int(r[3]),
+        )
+        for r in rows
     ]
 
 

@@ -190,7 +190,11 @@ def create_app(
         response.headers["Content-Security-Policy"] = CSP
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Cache-Control"] = "no-store"
+        # Pages carry attacker data and are never stored; the map and scripts are public files
+        # that the browser may keep as long as it checks they have not changed.
+        response.headers["Cache-Control"] = (
+            "no-cache" if request.endpoint == "static" else "no-store"
+        )
         return response
 
     @app.context_processor
@@ -234,6 +238,8 @@ def create_app(
                     "depth": queries.depth(d),
                     "points": queries.map_points(d),
                     "countries": queries.top_countries(d),
+                    "places": queries.top_places(d),
+                    "networks": queries.top_networks(d),
                     "hourly": queries.hourly_activity(d),
                     "techniques": queries.technique_counts(d, limit=8),
                     "probes": queries.probes(d),
