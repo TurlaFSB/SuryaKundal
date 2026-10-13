@@ -48,6 +48,8 @@ def test_no_secret_is_committed_every_one_is_a_placeholder():
         text = f.read_text(encoding="utf-8")
         assert "AKIA" not in text and "BEGIN " not in text, path
         for line in text.splitlines():
+            if "password_hash" in line:  # a column name, not a secret
+                continue
             if re.search(
                 r"(?i)(secret|password|passwd|-p'|aws_access_key_id|auth\"?\s*[:=])", line
             ):
@@ -148,3 +150,106 @@ def test_the_private_key_comes_from_the_state_directory(tmp_path):
     assert private[bf.A_MODE] == 0o100600
     pub = bf.lookup(root, "/root/.ssh/id_ed25519.pub")[bf.A_CONTENTS].decode()
     assert pub == "ssh-ed25519 AAAAexample root@stg-util02\n"
+
+
+# ----------------------------------------------------------- the wider lure set
+def test_the_first_lure_values_do_not_move_when_more_lures_are_added():
+    """Servers already running keep the same AWS key and DB password after an upgrade."""
+    t = bf.lure_tokens("x")
+    assert t["LURE_AWS_KEY_ID"] == "AKIALPHU3KOVD4N2HGLH"
+    assert t["LURE_DB_PASS"] == "ysFFjp1stJUhGvfh"  # noqa: S105
+
+
+def test_new_token_shapes():
+    t = bf.lure_tokens("alpha")
+    assert re.fullmatch(r"ghp_[A-Za-z0-9]{36}", t["LURE_GH_TOKEN"])
+    assert re.fullmatch(r"npm_[A-Za-z0-9]{36}", t["LURE_NPM_TOKEN"])
+    assert t["LURE_PYPI_TOKEN"].startswith("pypi-AgEIcHlwaS5vcmc")
+    assert re.fullmatch(r"[0-9a-f]{40}", t["LURE_ETH_ADDR"])
+    assert re.fullmatch(r"[0-9a-f]{64}", t["LURE_ETH_CT"])
+    assert len(base64.b64decode(t["LURE_WG_PRIVATE"])) == 32
+    assert len(t["LURE_SEED"].split()) == 12
+    assert len(__import__("json").loads(t["LURE_SOLANA_KEY"])) == 64
+    assert t["LURE_K8S_TOKEN"].count(".") == 2
+    pem = t["LURE_GCP_PEM"]
+    assert pem.startswith("-----BEGIN PRIVATE KEY-----\\n") and "\n" not in pem
+    rows = t["LURE_SQL_USERS"].splitlines()
+    assert len(rows) == 25
+    assert all(
+        re.fullmatch(r"\(\d+,'[^']+@example\.(com|org|net)','\$2y\$10\$.{53}','[^']+'\),?", r)
+        for r in rows
+    )
+
+
+def test_wallet_is_a_berkeley_db_btree_page():
+    data = bf.wallet_bytes("alpha")
+    assert len(data) == 8192 and data[12:16] == b"\x62\x31\x05\x00"
+    assert data[16:20] == (9).to_bytes(4, "little") and data[20:24] == (4096).to_bytes(4, "little")
+    assert data == bf.wallet_bytes("alpha") and data != bf.wallet_bytes("beta")
+
+
+def test_built_filesystem_has_the_wider_lures_with_the_right_owner_and_mode(tmp_path):
+    root = _build(tmp_path, "wide", "--lures-src", str(LURES))
+    tokens = bf.lure_tokens("test-seed")
+    addr = tokens["LURE_ETH_ADDR"]
+    keystore = bf.lookup(root, f"/root/.ethereum/keystore/UTC--2025-11-02T09-14-33.512Z--{addr}")
+    assert keystore is not None and addr.encode() in keystore[bf.A_CONTENTS]
+    wallet = "/root/.bitcoin/wallet.dat"
+    private = [
+        "/root/.kube/config",
+        "/root/.git-credentials",
+        "/root/.npmrc",
+        "/root/.pypirc",
+        "/root/.pgpass",
+        "/root/.my.cnf",
+        "/root/.config/gcloud/application_default_credentials.json",
+        "/root/.config/solana/id.json",
+        "/root/.config/rclone/rclone.conf",
+        "/root/.bitcoin/bitcoin.conf",
+        wallet,
+        "/etc/wireguard/wg0.conf",
+        "/opt/infra/ansible/.vault_pass",
+        "/srv/backups/appdb-latest.sql",
+    ]
+    for path in private:
+        node = bf.lookup(root, path)
+        assert node is not None, path
+        assert node[bf.A_MODE] == 0o100600, path
+        assert node[bf.A_SIZE] == len(node[bf.A_CONTENTS])
+    assert len(bf.lookup(root, wallet)[bf.A_CONTENTS]) == 8192
+    for path in ("/home/ops/passwords.txt", "/home/ops/seed.txt"):
+        node = bf.lookup(root, path)
+        assert (node[bf.A_UID], node[bf.A_GID]) == (1001, 1001), path
+    for path in ("/root/.kube", "/etc/wireguard", "/root/.ethereum/keystore", "/root/.bitcoin"):
+        assert bf.lookup(root, path)[bf.A_MODE] == 0o40700, path
+    seed = bf.lookup(root, "/home/ops/seed.txt")[bf.A_CONTENTS].decode()
+    assert tokens["LURE_SEED"] in seed
+
+
+def test_the_wider_files_agree_with_each_other():
+    t = bf.lure_tokens("alpha")
+    text = {p: bf.render(f.read_text(encoding="utf-8"), t) for p, f in FILES.items()}
+    assert t["LURE_DB_PASS"] in text["/root/.my.cnf"]
+    assert t["LURE_VAULT_PASS"] in text["/opt/infra/ansible/.vault_pass"]
+    assert t["LURE_PG_PASS"] in text["/root/.pgpass"]
+    assert t["LURE_GH_TOKEN"] in text["/root/.git-credentials"]
+    assert t["LURE_WG_PRIVATE"] in text["/etc/wireguard/wg0.conf"]
+
+
+def test_canary_key_replaces_the_made_up_pair_only_when_well_formed(capsys):
+    base = bf.lure_tokens("alpha")
+    key, secret = "AKIA" + "Q" * 16, "s" * 40
+    both = {"LURE_AWS_ACCESS_KEY_ID": key, "LURE_AWS_SECRET_ACCESS_KEY": secret}
+    swapped = bf.apply_canary(base, both)
+    assert swapped["LURE_AWS_KEY_ID"] == key and swapped["LURE_AWS_SECRET"] == secret
+    assert swapped["LURE_DB_PASS"] == base["LURE_DB_PASS"]
+    assert bf.apply_canary(base, {}) == base
+    assert bf.apply_canary(base, {"LURE_AWS_ACCESS_KEY_ID": ""}) == base
+    assert capsys.readouterr().out == ""
+    for bad in (
+        {"LURE_AWS_ACCESS_KEY_ID": key},
+        {"LURE_AWS_ACCESS_KEY_ID": "nope", "LURE_AWS_SECRET_ACCESS_KEY": secret},
+        {"LURE_AWS_ACCESS_KEY_ID": key, "LURE_AWS_SECRET_ACCESS_KEY": "short"},
+    ):
+        assert bf.apply_canary(base, bad) == base
+        assert "LURE_AWS_* ignored" in capsys.readouterr().out

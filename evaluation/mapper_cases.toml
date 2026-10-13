@@ -336,6 +336,14 @@ command = '''cat ~/.aws/credentials'''
 expect = ["T1552.001"]
 
 [[case]]
+command = '''cat /root/.kube/config'''
+expect = ["T1552.001"]
+
+[[case]]
+command = '''cat /root/.bitcoin/wallet.dat'''
+expect = ["T1005"]
+
+[[case]]
 command = '''grep -r password /var/www'''
 expect = ["T1552.001"]
 

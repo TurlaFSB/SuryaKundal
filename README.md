@@ -170,7 +170,7 @@ Before exposing the honeypot, lock down what it can reach: [`docs/EGRESS.md`](do
 
 Two harnesses in [`evaluation/`](evaluation/) give numbers instead of claims:
 
-- **ATT&CK mapper**: 103 hand-labelled commands; first run precision 0.90, recall 0.93, then fixed. See [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md).
+- **ATT&CK mapper**: 105 hand-labelled commands; first run precision 0.90, recall 0.93, then fixed. See [`docs/MAPPER_ACCURACY.md`](docs/MAPPER_ACCURACY.md).
 - **Honeypot deception**: 48 probes grouped by attacker class. Stock Cowrie passes 12, with the kit 35, which is every check configuration can fix. See [`docs/DECEPTION_TESTING.md`](docs/DECEPTION_TESTING.md).
 
 ```bash

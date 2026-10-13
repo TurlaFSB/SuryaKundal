@@ -22,6 +22,14 @@ All notable changes to this project are recorded here. The format follows
   same hosts, and the campaign rebuild uses less memory.
 
 ### Added
+- A much wider set of decoy files for the honeypot: Kubernetes, GitHub, npm, PyPI, PostgreSQL, MariaDB,
+  GCP, rclone, WireGuard and Terraform/Ansible secrets, cryptocurrency wallets (Ethereum keystore,
+  Bitcoin `wallet.dat` shaped like a Berkeley DB file, Solana keypair, a seed-phrase note), a database
+  dump of fake users, and admin sticky notes. All values are generated per deployment from separate
+  random streams, so existing lure values do not change; file owners and modes follow what an admin
+  would do; the matching packages appear in `dpkg -l`. Optional canary AWS key through
+  `LURE_AWS_ACCESS_KEY_ID` / `LURE_AWS_SECRET_ACCESS_KEY`. The ATT&CK mapper recognises reads of the new
+  credential files and wallet files (T1552.001, T1005).
 - Dashboard map rebuilt: real country borders and US state borders (Natural Earth, from the
   `world-atlas` and `us-atlas` packages; `tools/make_world_map.mjs` regenerates the file), zoom and pan,
   and a details box on hover or keyboard focus with address, city, state or region, network, abuse score

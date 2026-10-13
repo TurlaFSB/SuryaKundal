@@ -1,0 +1,11 @@
+services:
+  api:
+    image: registry.corp.internal/app/api:stg
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+  worker:
+    image: registry.corp.internal/app/worker:stg
+    restart: unless-stopped
+    env_file: .env

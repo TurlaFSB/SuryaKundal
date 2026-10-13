@@ -359,13 +359,60 @@ LURE_DIRS = {
     "/root/.ssh": 0o40700,
     "/root/.aws": 0o40700,
     "/root/.docker": 0o40700,
+    "/root/.kube": 0o40700,
+    "/root/.config": 0o40700,
+    "/root/.config/gcloud": 0o40755,
+    "/root/.config/rclone": 0o40755,
+    "/root/.config/solana": 0o40755,
+    "/root/.ethereum": 0o40700,
+    "/root/.ethereum/keystore": 0o40700,
+    "/root/.bitcoin": 0o40700,
+    "/etc/wireguard": 0o40700,
     "/opt/app": 0o40755,
+    "/opt/infra": 0o40755,
+    "/opt/infra/ansible": 0o40755,
+    "/srv/backups": 0o40755,
 }
-LURE_PRIVATE = re.compile(r"^/(root/\.(ssh|aws|docker)/|root/\.bash_history$|opt/app/\.env$)")
+# Files an administrator would have locked down; everything else is left world-readable,
+# the way a hurried one leaves it.
+LURE_PRIVATE = re.compile(
+    r"^/(root/\.(ssh|aws|docker|kube|ethereum|bitcoin)/"
+    r"|root/\.(bash_history|mysql_history|git-credentials|npmrc|pypirc|pgpass|my\.cnf)$"
+    r"|root/\.config/(gcloud|rclone|solana)/"
+    r"|etc/wireguard/|opt/app/\.env$|opt/infra/ansible/\.vault_pass$|srv/backups/)"
+)
+# A few fake files are generated, not templated: a wallet is binary, a key has a fixed shape.
+WALLET_PATH = "/root/.bitcoin/wallet.dat"
+BIP39_WORDS = (  # noqa: SIM905
+    "abandon ability absent access acid actor adapt agree album alert anchor angle apple "
+    "arena army artist bacon badge balance bamboo basket beach bitter blanket bonus brave "
+    "bridge brown bubble cabin cactus camera canyon carbon castle cattle chair cheese circle "
+    "citizen clever cliff cloud coconut copper coral crater cream cricket crystal damage "
+    "dance dawn debate delay desert diamond dinner dolphin dragon dream eagle earth echo "
+    "effort eight elbow empty engine enjoy evolve exact fabric falcon family fence festival "
+    "fiber field flame flight forest fossil fragile frozen galaxy garden gentle ginger glass "
+    "globe glory grain gravity guitar habit hamster harvest hazard helmet hidden hobby honey "
+    "horizon hover humble icon idea impulse island ivory jacket jaguar jelly jungle kangaroo "
+    "kidney kitchen ladder lamp lantern lawn lecture lemon letter liquid lobster lucky "
+    "machine magnet mango marble meadow melody mirror monkey mountain muffin nation nature "
+    "nephew noble north novel oasis ocean olive orbit orchard oxygen palace panda parade "
+    "pepper piano pilot planet pond pottery pyramid quantum rabbit radar rainbow raven rebel "
+    "river robot rocket saddle salmon scout shadow silver sketch spider spirit sunset tiger "
+    "timber tomato tunnel turtle umbrella unique valley velvet vessel violin walnut wheat "
+    "whale window winter wisdom yellow zebra zone "
+).split()
+
+
+def _rand_bytes(r: random.Random, n: int) -> bytes:
+    return bytes(r.getrandbits(8) for _ in range(n))
+
+
+def _wrap64(b64: str) -> str:
+    return "\n".join(b64[i : i + 64] for i in range(0, len(b64), 64))
 
 
 def lure_tokens(seed: str) -> dict:
-    """Made-up secrets for the lure files. They come from their own random stream so adding
+    """Made-up secrets for the lure files. They come from their own random streams so adding
     or changing lures never moves the values another part of the build draws, and they are
     generated here, never committed: a fixed key in a public repository would be a signature."""
     r = random.Random(f"{seed}:lures")
@@ -380,7 +427,7 @@ def lure_tokens(seed: str) -> dict:
         return base64.b64encode(blob).decode()
 
     db_pass = "".join(r.choice(alnum) for _ in range(16))
-    return {
+    tokens = {
         "LURE_AWS_KEY_ID": "AKIA" + "".join(r.choice(upper) for _ in range(16)),
         "LURE_AWS_SECRET": "".join(r.choice(b64) for _ in range(40)),
         "LURE_DB_PASS": db_pass,
@@ -390,6 +437,105 @@ def lure_tokens(seed: str) -> dict:
         "LURE_HOSTKEY_2": host_key(),
         "LURE_HOSTKEY_3": host_key(),
     }
+    # The second set has its own stream so the values above stay what an earlier build made.
+    g = random.Random(f"{seed}:lures2")
+
+    def pick(n: int, chars: str = alnum) -> str:
+        return "".join(g.choice(chars) for _ in range(n))
+
+    def b64url(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    pem_body = base64.b64encode(_rand_bytes(g, 1216)).decode()
+    pem = "-----BEGIN PRIVATE KEY-----\n" + _wrap64(pem_body) + "\n-----END PRIVATE KEY-----\n"
+    ca_body = base64.b64encode(_rand_bytes(g, 1050)).decode()
+    ca = "-----BEGIN CERTIFICATE-----\n" + _wrap64(ca_body) + "\n-----END CERTIFICATE-----\n"
+    jwt_head = b64url(json.dumps({"alg": "RS256", "kid": pick(43, alnum)}).encode())
+    jwt_body = b64url(
+        json.dumps(
+            {
+                "iss": "kubernetes/serviceaccount",
+                "kubernetes.io/serviceaccount/namespace": "staging",
+                "kubernetes.io/serviceaccount/secret.name": "stg-admin-token",
+                "kubernetes.io/serviceaccount/service-account.name": "stg-admin",
+                "sub": "system:serviceaccount:staging:stg-admin",
+            },
+            separators=(",", ":"),
+        ).encode()
+    )
+    eth_id = str(uuid.UUID(int=g.getrandbits(128), version=4))
+    first = ["alex", "sam", "priya", "chen", "maria", "omar", "lena", "ivan", "nora", "ravi"]
+    last = ["smith", "kumar", "garcia", "ng", "okafor", "ivanov", "rossi", "tanaka", "silva"]
+    rows = []
+    for uid in range(1, 26):
+        email = f"{g.choice(first)}.{g.choice(last)}{g.randint(1, 99)}@" + g.choice(
+            ["example.com", "example.org", "example.net"]
+        )
+        digest = "$2y$10$" + pick(
+            53, "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        )
+        day = g.randint(1, 28)
+        stamp = f"2024-{g.randint(1, 12):02d}-{day:02d} {g.randint(0, 23):02d}:{g.randint(0, 59):02d}:{g.randint(0, 59):02d}"
+        rows.append(f"({uid},'{email}','{digest}','{stamp}')")
+    tokens.update(
+        {
+            "LURE_K8S_CA": base64.b64encode(ca.encode()).decode(),
+            "LURE_K8S_TOKEN": f"{jwt_head}.{jwt_body}.{b64url(_rand_bytes(g, 256))}",
+            "LURE_GH_TOKEN": "ghp_" + pick(36),
+            "LURE_NPM_TOKEN": "npm_" + pick(36),
+            "LURE_PYPI_TOKEN": "pypi-AgEIcHlwaS5vcmc" + pick(70, alnum + "-_"),
+            "LURE_PG_PASS": pick(18),
+            "LURE_GCP_KEY_ID": "%040x" % g.getrandbits(160),
+            "LURE_GCP_PEM": pem.replace("\n", "\\n"),
+            "LURE_GCP_CLIENT_ID": "1" + "".join(g.choice("0123456789") for _ in range(20)),
+            "LURE_SOLANA_KEY": json.dumps(list(_rand_bytes(g, 64)), separators=(",", ":")),
+            "LURE_ETH_ADDR": "%040x" % g.getrandbits(160),
+            "LURE_ETH_CT": _rand_bytes(g, 32).hex(),
+            "LURE_ETH_IV": _rand_bytes(g, 16).hex(),
+            "LURE_ETH_SALT": _rand_bytes(g, 32).hex(),
+            "LURE_ETH_MAC": _rand_bytes(g, 32).hex(),
+            "LURE_ETH_ID": eth_id,
+            "LURE_BTC_RPC": pick(24),
+            "LURE_WG_PRIVATE": base64.b64encode(_rand_bytes(g, 32)).decode(),
+            "LURE_WG_PEER": base64.b64encode(_rand_bytes(g, 32)).decode(),
+            "LURE_OPS_PASS": pick(14),
+            "LURE_VAULT_PASS": pick(20),
+            "LURE_GRAFANA_PASS": pick(12),
+            "LURE_SEED": " ".join(g.choice(BIP39_WORDS) for _ in range(12)),
+            "LURE_SQL_USERS": ",\n".join(rows),
+        }
+    )
+    return tokens
+
+
+def apply_canary(tokens: dict, environ: dict | None = None) -> dict:
+    """Swap the made-up AWS key for a canary key the operator created (canarytokens.org gives
+    one free): using it anywhere sends the operator an alert. Both values must be set and well
+    formed, or the generated pair is kept and a warning is printed."""
+    environ = os.environ if environ is None else environ
+    key = environ.get("LURE_AWS_ACCESS_KEY_ID", "").strip()
+    secret = environ.get("LURE_AWS_SECRET_ACCESS_KEY", "").strip()
+    if not key and not secret:
+        return tokens
+    if not re.fullmatch(r"AKIA[A-Z0-9]{16}", key) or not re.fullmatch(r"[A-Za-z0-9+/]{40}", secret):
+        print("warning: LURE_AWS_* ignored (need AKIA + 16 characters and a 40-character secret)")
+        return tokens
+    return {**tokens, "LURE_AWS_KEY_ID": key, "LURE_AWS_SECRET": secret}
+
+
+def wallet_bytes(seed: str) -> bytes:
+    """A Bitcoin Core wallet.dat is a Berkeley DB btree: a page header with the btree magic
+    (0x00053162 at offset 12), version 9 and the page size, then opaque data."""
+    g = random.Random(f"{seed}:lures3")
+    page = 4096
+    head = (
+        b"\x00" * 8  # lsn
+        + (0).to_bytes(4, "little")  # page number
+        + (0x00053162).to_bytes(4, "little")  # magic
+        + (9).to_bytes(4, "little")  # version
+        + page.to_bytes(4, "little")
+    )
+    return head + _rand_bytes(g, page * 2 - len(head))
 
 
 def install_lures(
@@ -397,19 +543,27 @@ def install_lures(
 ) -> int:
     """Write the lure files into the pickle. Returns how many were added."""
     r = random.Random(f"{seed}:lure-times")
-    tokens = lure_tokens(seed)
+    tokens = apply_canary(lure_tokens(seed))
     for path, mode in LURE_DIRS.items():
         node = mkdirs(root, path, install_ts, 0, 0, mode)
         node[A_UID], node[A_GID], node[A_MODE] = 0, 0, mode
     files: list[tuple[str, bytes, int, int, int]] = []
     for f in sorted(p for p in src.rglob("*") if p.is_file()):
-        rel = "/" + f.relative_to(src).as_posix()
-        owner = "deploy" if rel.startswith("/home/deploy/") else "root"
+        # Tokens may sit in the file name too (an Ethereum keystore is named after its address).
+        rel = render("/" + f.relative_to(src).as_posix(), tokens)
+        owner = (
+            "deploy"
+            if rel.startswith("/home/deploy/")
+            else "ops"
+            if rel.startswith("/home/ops/")
+            else "root"
+        )
         uid, gid = HOME_OWNERS[owner]
         mode = 0o100600 if LURE_PRIVATE.match(rel) else 0o100644
         if rel.endswith(".sh"):
             mode = 0o100750
         files.append((rel, render(f.read_text(encoding="utf-8"), tokens).encode(), uid, gid, mode))
+    files.append((WALLET_PATH, wallet_bytes(seed), 0, 0, 0o100600))
     # The private key is made at deploy time and kept with the host keys, so it does not
     # change when the honeypot restarts. Without ssh-keygen there is no key file, and none is added.
     if key_dir is not None:

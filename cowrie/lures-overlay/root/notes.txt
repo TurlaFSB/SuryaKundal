@@ -1,0 +1,6 @@
+stg-util02 notes
+- backups run from cron (see /etc/cron.d/backup), dump goes to bak-stg-01
+- db-stg-01 login is ops / @LURE_OPS_PASS@ (rotate after the audit)
+- vpn config is in /etc/wireguard/wg0.conf, wg-quick up wg0
+- TODO: move the registry login out of ~/.docker/config.json
+- TODO: wallet backup is in /home/ops/seed.txt, put it somewhere safe

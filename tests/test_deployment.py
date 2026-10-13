@@ -40,7 +40,14 @@ def test_honeypot_is_opt_in_and_gets_no_secrets():
     assert "env_file" not in cowrie  # the internet-facing container must not receive .env
     assert "env_file" not in SERVICES["dashboard"]
     assert "env_file" in SERVICES["pipeline"]
-    assert not any("TOKEN" in k or "KEY" in k for k in cowrie["environment"])
+    # The one exception is the optional canary pair: bait shown to attackers on purpose, which
+    # opens nothing and only alerts the operator.
+    names = [k for k in cowrie["environment"] if not k.startswith("LURE_AWS_")]
+    assert not any("TOKEN" in k or "KEY" in k for k in names)
+    assert set(cowrie["environment"]) - set(names) <= {
+        "LURE_AWS_ACCESS_KEY_ID",
+        "LURE_AWS_SECRET_ACCESS_KEY",
+    }
 
 
 def test_honeypot_log_reaches_the_pipeline_read_only_through_a_shared_volume():

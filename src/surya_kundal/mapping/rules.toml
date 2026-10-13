@@ -226,9 +226,18 @@ id = "credential-files"
 technique = "T1552.001"
 confidence = "high"
 description = "Reading well-known credential files"
-pattern = '''^(cat|less|more|head|tail|grep|cp)\s+.*(\.aws/credentials|\.git-credentials|\.netrc|\.pgpass|\.my\.cnf|wp-config\.php|\.docker/config\.json|/\.env\b)'''
-examples = ["cat ~/.aws/credentials", "cat wp-config.php", "cat /var/www/.env"]
+pattern = '''^(cat|less|more|head|tail|grep|cp)\s+.*(\.aws/credentials|\.git-credentials|\.netrc|\.pgpass|\.my\.cnf|wp-config\.php|\.docker/config\.json|/\.env\b|\.kube/config|\.npmrc|\.pypirc|rclone\.conf|application_default_credentials\.json|\.vault_pass|wg0\.conf)'''
+examples = ["cat ~/.aws/credentials", "cat wp-config.php", "cat /var/www/.env", "cat ~/.kube/config", "cat /root/.npmrc"]
 not_examples = ["cat /etc/hostname"]
+
+[[rule]]
+id = "wallet-files"
+technique = "T1005"
+confidence = "medium"
+description = "Collecting cryptocurrency wallet, keystore or seed files"
+pattern = '''(wallet\.dat|\.ethereum/keystore|UTC--\d{4}-|solana/id\.json|seed\.txt|\.bitcoin/)'''
+examples = ["cat ~/.bitcoin/wallet.dat", "ls /root/.ethereum/keystore", "cat /home/ops/seed.txt"]
+not_examples = ["cat /etc/hostname", "ls /root/.aws"]
 
 [[rule]]
 id = "credential-brute-force-tool"

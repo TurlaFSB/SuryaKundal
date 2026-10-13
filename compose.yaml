@@ -75,6 +75,10 @@ services:
       # collect: accepts a few dozen weak root passwords so scanners get in (more data).
       # stealth: three exact pairs only (hardest to spot, very little data).
       COWRIE_POLICY: ${COWRIE_POLICY:-collect}
+      # Optional canary AWS key shown in the decoy credential files (see cowrie/README.md).
+      # Unset means the build makes up a key that alerts nobody.
+      LURE_AWS_ACCESS_KEY_ID: ${LURE_AWS_ACCESS_KEY_ID:-}
+      LURE_AWS_SECRET_ACCESS_KEY: ${LURE_AWS_SECRET_ACCESS_KEY:-}
     # Its own bridge with a fixed name, so the host firewall (cowrie/egress.sh) can limit what
     # the honeypot may open towards the internet, the host and your LAN. See docs/EGRESS.md.
     networks: [honeynet]

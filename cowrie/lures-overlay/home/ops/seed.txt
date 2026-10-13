@@ -1,0 +1,2 @@
+seed phrase (do not share)
+@LURE_SEED@

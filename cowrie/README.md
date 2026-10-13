@@ -98,6 +98,11 @@ bots) look for things worth taking, so the kit plants some, in `lures-overlay/`:
 | `/root/.ssh/` | `id_ed25519` and its public key, a `config` and a `known_hosts` that point at two made-up internal hosts |
 | `/root/.bash_history` | a short admin history that mentions those files and hosts |
 | `/home/deploy/backup.sh`, `/etc/cron.d/backup` | a nightly database dump script and its cron entry |
+| `/root/.kube/config`, `.git-credentials`, `.npmrc`, `.pypirc`, `.pgpass`, `.my.cnf`, `.mysql_history` | developer and operations tokens: Kubernetes, GitHub, npm, PyPI, PostgreSQL, MariaDB |
+| `/root/.config/{gcloud,rclone,solana}/`, `/etc/wireguard/wg0.conf` | cloud service account, backup remote, a Solana keypair, a VPN key |
+| `/root/.ethereum/keystore/`, `/root/.bitcoin/{bitcoin.conf,wallet.dat}`, `/home/ops/seed.txt` | cryptocurrency wallets: what miners and wallet thieves search for first |
+| `/opt/infra/` (Terraform variables, Ansible inventory and vault password), `/opt/app/docker-compose.yml` | infrastructure-as-code secrets |
+| `/srv/backups/appdb-latest.sql`, `/home/ops/passwords.txt`, `/root/notes.txt` | a database dump of fake users (reserved `example.*` addresses, bcrypt-shaped hashes) and the sticky-note files admins really leave behind |
 
 Nothing here is real. The AWS key, database password, application secret and the three host keys are
 generated per deployment from the persona seed (separate random streams, so the machine-id,
@@ -106,7 +111,18 @@ a public repository would identify every deployment that uses it. The SSH key pa
 `ssh-keygen` at the first deploy and kept next to the host keys, so it does not change on restart; it
 opens nothing. Without `ssh-keygen` the key files are simply left out.
 
-Reading these files maps to ATT&CK credential-access techniques (T1552.001, .003 and .004), which
+Every value is generated, so none of them opens anything. The matching packages (git, awscli,
+wireguard-tools, the MariaDB and PostgreSQL clients, rsync, jq, unzip) are in the `dpkg -l` list so the
+files do not contradict the machine; their version numbers are copied from Debian 12 point releases
+and not re-verified, so treat them as approximate.
+
+**Canary key (optional).** A made-up AWS key alerts nobody. If you create a free "AWS keys" token at
+canarytokens.org (it emails you when the key is used anywhere), put its pair in the server's `.env` as
+`LURE_AWS_ACCESS_KEY_ID` and `LURE_AWS_SECRET_ACCESS_KEY`; the next start shows that pair in
+`~/.aws/credentials` and `/opt/app/.env` instead. The values stay in `.env` on the server and never in Git.
+A malformed pair is ignored with a warning.
+
+Reading these files maps to ATT&CK credential-access techniques (T1552.001, .003 and .004, and T1005 for wallets), which
 makes it measurable: the dashboard's session pages show who went looking. Nothing the attacker
 does with the values can leave the machine, because egress is blocked.
 

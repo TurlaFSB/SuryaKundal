@@ -1,0 +1,1 @@
+{"address":"@LURE_ETH_ADDR@","crypto":{"cipher":"aes-128-ctr","ciphertext":"@LURE_ETH_CT@","cipherparams":{"iv":"@LURE_ETH_IV@"},"kdf":"scrypt","kdfparams":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"@LURE_ETH_SALT@"},"mac":"@LURE_ETH_MAC@"},"id":"@LURE_ETH_ID@","version":3}
