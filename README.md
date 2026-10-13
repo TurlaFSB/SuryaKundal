@@ -17,7 +17,7 @@ Surya Kundal is the analysis layer for a [Cowrie](https://github.com/cowrie/cowr
 
 <p align="center">
   <img src="docs/images/dashboard-overview.png" alt="Surya Kundal dashboard overview" width="860">
-  <br><sub>The dashboard overview, rendered from synthetic sample data.</sub>
+  <br><sub>The dashboard overview on the live deployment after two days: real attacker traffic, with the maintainer's own test sessions hidden.</sub>
 </p>
 
 ## Contents
