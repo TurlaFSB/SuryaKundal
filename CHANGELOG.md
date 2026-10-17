@@ -22,6 +22,8 @@ All notable changes to this project are recorded here. The format follows
   same hosts, and the campaign rebuild uses less memory.
 
 ### Added
+- README: a five-minute lab quick start (honeypot host plus an attacking machine such as Kali, with the
+  dashboard over an SSH tunnel, cleanup and a pointer to the hardening documents before exposure).
 - A much wider set of decoy files for the honeypot: Kubernetes, GitHub, npm, PyPI, PostgreSQL, MariaDB,
   GCP, rclone, WireGuard and Terraform/Ansible secrets, cryptocurrency wallets (Ethereum keystore,
   Bitcoin `wallet.dat` shaped like a Berkeley DB file, Solana keypair, a seed-phrase note), a database
