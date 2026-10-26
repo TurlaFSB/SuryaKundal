@@ -8,7 +8,7 @@
 # and keeps persona, host keys and boot time stable inside the state volume.
 
 # --- build: Cowrie and its dependencies into a virtualenv ----------------------
-FROM python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641 AS build
+FROM python:3.15-slim-bookworm@sha256:575f8bc12ec26542e0678bc6b60e385218248019d433157ec327264a78c3a853 AS build
 ARG COWRIE_REF=v3.1.1
 ARG COWRIE_COMMIT=c17c9b73d6af0972334ea1e90b20d974cb24eeca
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -24,7 +24,7 @@ RUN python -m venv /opt/cowrie-venv \
 RUN /opt/cowrie-venv/bin/python -c "from twisted.plugin import IPlugin, getPlugins; import twisted.plugins; list(getPlugins(IPlugin, twisted.plugins))"
 
 # --- runtime ---------------------------------------------------------------------
-FROM python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
+FROM python:3.15-slim-bookworm@sha256:575f8bc12ec26542e0678bc6b60e385218248019d433157ec327264a78c3a853
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/cowrie-venv/bin:$PATH \
